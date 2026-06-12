@@ -57,7 +57,7 @@ The simple UI can create keys that are only usable on selected weekdays and, opt
 ```json
 {
   "huawei_time_access": {
-    "timezone": "Asia/Shanghai",
+    "timezone": "America/Sao_Paulo",
     "rules": [
       { "days": [1, 2, 3, 4, 5], "start": "09:00", "end": "17:00" }
     ]

@@ -48,7 +48,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Restrict access by schedule")).not.toBeChecked();
   await expect(page.getByText("This key can be used at any time.")).toBeVisible();
   await page.getByLabel("Restrict access by schedule").check();
-  await expect(page.getByLabel("Access timezone")).toHaveValue("Asia/Shanghai");
+  await expect(page.getByLabel("Access timezone")).toHaveValue("America/Sao_Paulo");
   await expect(page.getByLabel("Mon")).toBeChecked();
   await expect(page.getByLabel("Fri")).toBeChecked();
   await expect(page.getByLabel("Sat")).not.toBeChecked();
@@ -73,7 +73,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     metadata: {
       huawei_token_budget: { max_tokens: 10000, reset_duration: "30d", counts: "total_tokens" },
       huawei_time_access: {
-        timezone: "Asia/Shanghai",
+        timezone: "America/Sao_Paulo",
         rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }]
       }
     },

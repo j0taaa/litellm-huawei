@@ -19,6 +19,7 @@ const weekDays = [
 ];
 
 const timezones = [
+  "America/Sao_Paulo",
   "Asia/Shanghai",
   "UTC",
   "America/New_York",
@@ -193,7 +194,7 @@ function KeysPage() {
     tokenBudgetResetAmount: 30,
     tokenBudgetResetUnit: "d" as DurationUnit,
     accessSchedule: false,
-    accessTimezone: "Asia/Shanghai",
+    accessTimezone: "America/Sao_Paulo",
     accessDays: [1, 2, 3, 4, 5] as number[],
     accessHours: false,
     accessStart: "09:00",
@@ -259,7 +260,7 @@ function KeysPage() {
         tokenBudgetResetAmount: 30,
         tokenBudgetResetUnit: "d",
         accessSchedule: false,
-        accessTimezone: "Asia/Shanghai",
+        accessTimezone: "America/Sao_Paulo",
         accessDays: [1, 2, 3, 4, 5],
         accessHours: false,
         accessStart: "09:00",
