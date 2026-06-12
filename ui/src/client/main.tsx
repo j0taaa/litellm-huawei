@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3, LogOut, Plus, RefreshCcw, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
-import type { ApiKeyRow, ModelInfo, SessionUser, StatsSummary, TeamRow } from "../shared/types";
+import type { ApiKeyListRow, ApiKeyRow, ModelInfo, SessionUser, StatsSummary, TeamRow } from "../shared/types";
 import "./styles.css";
 
 type RoutePath = "/stats" | "/keys" | "/teams";
@@ -172,12 +172,13 @@ function StatsPage() {
 }
 
 function KeysPage() {
-  const { data, loading, reload } = useResource<{ keys?: ApiKeyRow[]; data?: ApiKeyRow[] }>("/api/keys?page=1&size=100");
+  const { data, loading, reload } = useResource<{ keys?: ApiKeyListRow[]; data?: ApiKeyListRow[] }>("/api/keys?page=1&size=100");
   const models = useResource<{ data?: ModelInfo[] }>("/api/models");
   const teamsResource = useResource<TeamRow[] | { teams?: TeamRow[]; data?: TeamRow[] }>("/api/teams");
   const [createdKey, setCreatedKey] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [deletingKey, setDeletingKey] = useState("");
   const [form, setForm] = useState({
     key_alias: "",
     team_id: "",
@@ -295,11 +296,16 @@ function KeysPage() {
     setCreatedKey("");
   }
 
-  async function deleteKey(row: ApiKeyRow) {
-    const key = row.token || row.key_name;
+  async function deleteKey(row: ApiKeyListRow) {
+    const key = keyIdentifier(row);
     if (!key) return;
-    await api("/api/keys", { method: "DELETE", body: { keys: [key] } });
-    reload();
+    setDeletingKey(key);
+    try {
+      await api("/api/keys", { method: "DELETE", body: { keys: [key] } });
+      reload();
+    } finally {
+      setDeletingKey("");
+    }
   }
 
   return (
@@ -485,8 +491,11 @@ function KeysPage() {
       {loading ? <EmptyState text="Loading keys" /> : (
         <table>
           <thead><tr><th>Alias</th><th>Key</th><th>Owner</th><th>Team</th><th>Spend</th><th>Budget</th><th>Status</th><th></th></tr></thead>
-          <tbody>{keys.map((row, index) => (
-            <tr key={`${row.key_name || row.token || index}`}>
+          <tbody>{keys.map((rawRow, index) => {
+            const row = normalizeKeyRow(rawRow);
+            const key = keyIdentifier(rawRow);
+            return (
+            <tr key={`${key || row.key_name || index}`}>
               <td>{row.key_alias || "-"}</td>
               <td><code>{mask(row.key_name || row.token)}</code></td>
               <td>{row.user_id || "-"}</td>
@@ -494,9 +503,10 @@ function KeysPage() {
               <td>{currency(row.spend || 0)}</td>
               <td>{row.max_budget ? currency(row.max_budget) : "-"}</td>
               <td><StatusBadge blocked={Boolean(row.blocked)} /></td>
-              <td><button className="icon danger" onClick={() => deleteKey(row)} title="Delete key"><Trash2 size={16} /></button></td>
+              <td><button className="icon danger" onClick={() => deleteKey(rawRow)} title="Delete key" disabled={!key || deletingKey === key}><Trash2 size={16} /></button></td>
             </tr>
-          ))}</tbody>
+            );
+          })}</tbody>
         </table>
       )}
     </section>
@@ -664,6 +674,14 @@ async function api<T>(path: string, options: { method?: string; body?: unknown }
 
 function clean<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== "")) as T;
+}
+
+function normalizeKeyRow(row: ApiKeyListRow): ApiKeyRow {
+  return typeof row === "string" ? { token: row } : row;
+}
+
+function keyIdentifier(row: ApiKeyListRow): string {
+  return typeof row === "string" ? row : row.token || "";
 }
 
 function mask(value?: string | null): string {

@@ -17,6 +17,8 @@ export type ApiKeyRow = {
   blocked?: boolean | null;
 };
 
+export type ApiKeyListRow = ApiKeyRow | string;
+
 export type TeamRow = {
   team_id: string;
   team_alias?: string | null;
@@ -62,4 +64,3 @@ export type StatsSummary = {
   byTeam: Array<{ name: string; spend: number; requests: number }>;
   recent: Array<Record<string, unknown>>;
 };
-

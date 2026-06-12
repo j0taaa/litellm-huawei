@@ -50,6 +50,7 @@ app.get("/api/models", async (request, reply) => {
 app.get("/api/keys", async (request, reply) => {
   const session = await requireSession(request, reply);
   const query = new URLSearchParams(request.query as Record<string, string>);
+  if (!query.has("return_full_object")) query.set("return_full_object", "true");
   return normalizeModelLists(await litellm.request(`/key/list?${query.toString()}`, session.litellmKey));
 });
 
@@ -64,6 +65,10 @@ app.post("/api/keys", async (request, reply) => {
 app.delete("/api/keys", async (request, reply) => {
   const session = await requireSession(request, reply);
   const body = z.object({ keys: z.array(z.string()).optional(), key_aliases: z.array(z.string()).optional() }).parse(request.body || {});
+  if (!body.keys?.length && !body.key_aliases?.length) {
+    reply.code(400);
+    throw new Error("key_required");
+  }
   return litellm.request("/key/delete", session.litellmKey, { method: "POST", body: JSON.stringify(body) });
 });
 

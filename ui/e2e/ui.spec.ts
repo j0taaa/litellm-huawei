@@ -15,10 +15,27 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Keys" })).toBeVisible();
   await expect(page).toHaveURL(/\/keys$/);
   let createPayload: Record<string, any> | undefined;
-  await page.route("**/api/keys", async (route) => {
-    if (route.request().method() === "POST") {
+  let deletePayload: Record<string, any> | undefined;
+  await page.route("**/api/keys**", async (route) => {
+    const method = route.request().method();
+    if (method === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          keys: [{ token: "hash-delete-test", key_name: "sk-...test", key_alias: "Delete test", spend: 0, max_budget: null, blocked: false }]
+        })
+      });
+      return;
+    }
+    if (method === "POST") {
       createPayload = route.request().postDataJSON();
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ key: "sk-test-schedule" }) });
+      return;
+    }
+    if (method === "DELETE") {
+      deletePayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ deleted_keys: ["hash-delete-test"] }) });
       return;
     }
     await route.continue();
@@ -80,6 +97,9 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     models: ["deepseek-v4-flash"]
   });
   await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByText("Delete test")).toBeVisible();
+  await page.getByTitle("Delete key").first().click();
+  expect(deletePayload).toEqual({ keys: ["hash-delete-test"] });
 
   await page.getByRole("link", { name: "Teams" }).click();
   await expect(page.getByRole("heading", { name: "Teams" })).toBeVisible();
