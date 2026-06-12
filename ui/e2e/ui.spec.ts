@@ -15,6 +15,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Keys" })).toBeVisible();
   await expect(page).toHaveURL(/\/keys$/);
   let createPayload: Record<string, any> | undefined;
+  let clonePayload: Record<string, any> | undefined;
   let updatePayload: Record<string, any> | undefined;
   let updateUrl = "";
   let deletePayload: Record<string, any> | undefined;
@@ -45,8 +46,14 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
       return;
     }
     if (method === "POST") {
-      createPayload = route.request().postDataJSON();
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ key: "sk-test-schedule" }) });
+      const payload = route.request().postDataJSON();
+      if (createPayload) {
+        clonePayload = payload;
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ key: "sk-test-clone" }) });
+      } else {
+        createPayload = payload;
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ key: "sk-test-schedule" }) });
+      }
       return;
     }
     if (method === "PATCH") {
@@ -144,6 +151,28 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] }
     }
   });
+  await page.getByTitle("Clone key").first().click();
+  await expect(page.getByRole("dialog", { name: "Clone key" })).toBeVisible();
+  await expect(page.getByPlaceholder("Production app")).toHaveValue("Delete test copy");
+  await expect(page.getByLabel("Budget USD")).toHaveValue("25");
+  await expect(page.getByLabel("Max TPS")).toHaveValue("2");
+  await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
+  await page.getByRole("dialog").getByRole("button", { name: "Clone key" }).click();
+  await expect(page.getByText("sk-test-clone")).toBeVisible();
+  expect(clonePayload).toMatchObject({
+    key_alias: "Delete test copy",
+    max_budget: 25,
+    rpm_limit: 120,
+    tpm_limit: 1000,
+    max_parallel_requests: 2,
+    blocked: false,
+    models: ["deepseek-v4-flash"],
+    metadata: {
+      huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] }
+    }
+  });
+  expect(clonePayload).not.toHaveProperty("key");
+  await page.getByRole("button", { name: "Done" }).click();
   await page.getByTitle("Delete key").first().click();
   expect(deletePayload).toEqual({ keys: ["hash-delete-test"] });
 

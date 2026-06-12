@@ -234,6 +234,7 @@ function KeysPage() {
   const [createdKey, setCreatedKey] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<ApiKeyListRow | null>(null);
+  const [cloningKey, setCloningKey] = useState<ApiKeyListRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [deletingKey, setDeletingKey] = useState("");
   const [form, setForm] = useState<KeyFormState>(defaultKeyForm);
@@ -246,7 +247,7 @@ function KeysPage() {
     event.preventDefault();
     setCreating(true);
     const editingId = editingKey ? keyIdentifier(editingKey) : "";
-    const payload = keyPayload(form, Boolean(editingKey));
+    const payload = keyPayload(form, editingKey ? "edit" : cloningKey ? "clone" : "create");
     try {
       if (editingId) {
         await api(`/api/keys/${encodeURIComponent(editingId)}`, { method: "PATCH", body: payload });
@@ -280,6 +281,7 @@ function KeysPage() {
     setForm(defaultKeyForm);
     setCreatedKey("");
     setEditingKey(null);
+    setCloningKey(null);
     setCreateOpen(true);
   }
 
@@ -287,6 +289,19 @@ function KeysPage() {
     setForm(keyFormFromRow(normalizeKeyRow(row)));
     setCreatedKey("");
     setEditingKey(row);
+    setCloningKey(null);
+    setCreateOpen(true);
+  }
+
+  function openCloneModal(row: ApiKeyListRow) {
+    const nextForm = keyFormFromRow(normalizeKeyRow(row));
+    setForm({
+      ...nextForm,
+      key_alias: nextForm.key_alias ? `${nextForm.key_alias} copy` : ""
+    });
+    setCreatedKey("");
+    setEditingKey(null);
+    setCloningKey(row);
     setCreateOpen(true);
   }
 
@@ -294,6 +309,7 @@ function KeysPage() {
     setCreateOpen(false);
     setCreatedKey("");
     setEditingKey(null);
+    setCloningKey(null);
     setForm(defaultKeyForm);
   }
 
@@ -318,7 +334,7 @@ function KeysPage() {
         action={<div className="header-actions"><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button><button className="primary" onClick={openCreateModal}><Plus size={16} /> Create key</button></div>}
       />
       {createOpen ? (
-        <Modal title={editingKey ? "Edit key" : "Create key"} onClose={closeKeyModal}>
+        <Modal title={editingKey ? "Edit key" : cloningKey ? "Clone key" : "Create key"} onClose={closeKeyModal}>
           {createdKey ? (
             <div className="modal-stack">
               <div className="secret"><code>{createdKey}</code><button className="secondary" onClick={() => navigator.clipboard.writeText(createdKey)}><Copy size={16} /> Copy</button></div>
@@ -487,7 +503,7 @@ function KeysPage() {
                   ))}
                 </div>
               </fieldset>
-              <div className="modal-actions"><button type="button" className="secondary" onClick={closeKeyModal}>Cancel</button><button className="primary" disabled={creating || scheduleInvalid}>{creating ? (editingKey ? "Saving" : "Creating") : (editingKey ? "Save changes" : "Create key")}</button></div>
+              <div className="modal-actions"><button type="button" className="secondary" onClick={closeKeyModal}>Cancel</button><button className="primary" disabled={creating || scheduleInvalid}>{creating ? (editingKey ? "Saving" : cloningKey ? "Cloning" : "Creating") : (editingKey ? "Save changes" : cloningKey ? "Clone key" : "Create key")}</button></div>
             </form>
           )}
         </Modal>
@@ -510,6 +526,7 @@ function KeysPage() {
               <td>
                 <div className="row-actions">
                   <button className="icon" onClick={() => openEditModal(rawRow)} title="Edit key" disabled={!key}><Pencil size={16} /></button>
+                  <button className="icon" onClick={() => openCloneModal(rawRow)} title="Clone key" disabled={!key}><Copy size={16} /></button>
                   <button className="icon danger" onClick={() => deleteKey(rawRow)} title="Delete key" disabled={!key || deletingKey === key}><Trash2 size={16} /></button>
                 </div>
               </td>
@@ -685,7 +702,9 @@ function clean<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== "")) as T;
 }
 
-function keyPayload(form: KeyFormState, editing: boolean): Record<string, unknown> {
+function keyPayload(form: KeyFormState, mode: "create" | "edit" | "clone"): Record<string, unknown> {
+  const editing = mode === "edit";
+  const cloning = mode === "clone";
   const metadata = clean({
     huawei_token_budget: form.tokenBudget ? clean({
       max_tokens: Number(form.tokenBudgetTokens),
@@ -706,14 +725,14 @@ function keyPayload(form: KeyFormState, editing: boolean): Record<string, unknow
   return clean({
     key_alias: form.key_alias || (editing ? null : undefined),
     team_id: form.team_id || (editing ? null : undefined),
-    duration: !editing && form.expires ? `${form.durationAmount}${form.durationUnit}` : undefined,
+    duration: mode === "create" && form.expires ? `${form.durationAmount}${form.durationUnit}` : undefined,
     max_budget: form.max_budget ? Number(form.max_budget) : (editing ? null : undefined),
     budget_duration: form.resetBudget ? `${form.budgetResetAmount}${form.budgetResetUnit}` : (editing ? null : undefined),
     rpm_limit: form.max_tps ? Math.ceil(Number(form.max_tps) * 60) : (editing ? null : undefined),
     tpm_limit: form.max_tpm ? Number(form.max_tpm) : (editing ? null : undefined),
     max_parallel_requests: form.max_parallel_requests ? Number(form.max_parallel_requests) : (editing ? null : undefined),
     metadata: Object.keys(metadata).length ? metadata : (editing ? {} : undefined),
-    blocked: editing ? form.blocked : undefined,
+    blocked: editing || cloning ? form.blocked : undefined,
     models: form.models
   });
 }
