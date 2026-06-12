@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3, LogOut, Plus, RefreshCcw, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3, LogOut, Pencil, Plus, RefreshCcw, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
 import type { ApiKeyListRow, ApiKeyRow, ModelInfo, SessionUser, StatsSummary, TeamRow } from "../shared/types";
 import "./styles.css";
 
@@ -29,6 +29,62 @@ const timezones = [
   "Asia/Singapore",
   "Asia/Tokyo"
 ];
+
+type KeyFormState = {
+  key_alias: string;
+  team_id: string;
+  max_budget: string;
+  resetBudget: boolean;
+  budgetResetAmount: number;
+  budgetResetUnit: DurationUnit;
+  max_tps: string;
+  max_tpm: string;
+  max_parallel_requests: string;
+  tokenBudget: boolean;
+  tokenBudgetTokens: string;
+  tokenBudgetReset: boolean;
+  tokenBudgetResetAmount: number;
+  tokenBudgetResetUnit: DurationUnit;
+  accessSchedule: boolean;
+  accessTimezone: string;
+  accessDays: number[];
+  accessHours: boolean;
+  accessStart: string;
+  accessEnd: string;
+  blocked: boolean;
+  expires: boolean;
+  durationAmount: number;
+  durationUnit: DurationUnit;
+  models: string[];
+};
+
+const defaultKeyForm: KeyFormState = {
+  key_alias: "",
+  team_id: "",
+  max_budget: "",
+  resetBudget: false,
+  budgetResetAmount: 30,
+  budgetResetUnit: "d",
+  max_tps: "",
+  max_tpm: "",
+  max_parallel_requests: "",
+  tokenBudget: false,
+  tokenBudgetTokens: "",
+  tokenBudgetReset: false,
+  tokenBudgetResetAmount: 30,
+  tokenBudgetResetUnit: "d",
+  accessSchedule: false,
+  accessTimezone: "America/Sao_Paulo",
+  accessDays: [1, 2, 3, 4, 5],
+  accessHours: false,
+  accessStart: "09:00",
+  accessEnd: "17:00",
+  blocked: false,
+  expires: false,
+  durationAmount: 30,
+  durationUnit: "d",
+  models: []
+};
 
 const routes: Array<{ path: RoutePath; label: string; icon: React.ReactNode; page: React.ReactNode }> = [
   { path: "/stats", label: "Stats", icon: <BarChart3 size={18} />, page: <StatsPage /> },
@@ -177,100 +233,29 @@ function KeysPage() {
   const teamsResource = useResource<TeamRow[] | { teams?: TeamRow[]; data?: TeamRow[] }>("/api/teams");
   const [createdKey, setCreatedKey] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingKey, setEditingKey] = useState<ApiKeyListRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [deletingKey, setDeletingKey] = useState("");
-  const [form, setForm] = useState({
-    key_alias: "",
-    team_id: "",
-    max_budget: "",
-    resetBudget: false,
-    budgetResetAmount: 30,
-    budgetResetUnit: "d" as DurationUnit,
-    max_tps: "",
-    max_tpm: "",
-    max_parallel_requests: "",
-    tokenBudget: false,
-    tokenBudgetTokens: "",
-    tokenBudgetReset: false,
-    tokenBudgetResetAmount: 30,
-    tokenBudgetResetUnit: "d" as DurationUnit,
-    accessSchedule: false,
-    accessTimezone: "America/Sao_Paulo",
-    accessDays: [1, 2, 3, 4, 5] as number[],
-    accessHours: false,
-    accessStart: "09:00",
-    accessEnd: "17:00",
-    expires: false,
-    durationAmount: 30,
-    durationUnit: "d" as DurationUnit,
-    models: [] as string[]
-  });
+  const [form, setForm] = useState<KeyFormState>(defaultKeyForm);
   const keys = data?.keys || data?.data || [];
   const modelNames = (models.data?.data || []).map((model) => model.model_name);
   const teams = Array.isArray(teamsResource.data) ? teamsResource.data : teamsResource.data?.teams || teamsResource.data?.data || [];
   const scheduleInvalid = form.accessSchedule && form.accessDays.length === 0;
 
-  async function createKey(event: React.FormEvent) {
+  async function submitKey(event: React.FormEvent) {
     event.preventDefault();
     setCreating(true);
-    const metadata = clean({
-      huawei_token_budget: form.tokenBudget ? clean({
-        max_tokens: Number(form.tokenBudgetTokens),
-        reset_duration: form.tokenBudgetReset ? `${form.tokenBudgetResetAmount}${form.tokenBudgetResetUnit}` : undefined,
-        counts: "total_tokens"
-      }) : undefined,
-      huawei_time_access: form.accessSchedule ? clean({
-        timezone: form.accessTimezone,
-        rules: [
-          clean({
-            days: form.accessDays,
-            start: form.accessHours ? form.accessStart : undefined,
-            end: form.accessHours ? form.accessEnd : undefined
-          })
-        ]
-      }) : undefined
-    });
-    const payload = clean({
-      key_alias: form.key_alias || undefined,
-      team_id: form.team_id || undefined,
-      duration: form.expires ? `${form.durationAmount}${form.durationUnit}` : undefined,
-      max_budget: form.max_budget ? Number(form.max_budget) : undefined,
-      budget_duration: form.resetBudget ? `${form.budgetResetAmount}${form.budgetResetUnit}` : undefined,
-      rpm_limit: form.max_tps ? Math.ceil(Number(form.max_tps) * 60) : undefined,
-      tpm_limit: form.max_tpm ? Number(form.max_tpm) : undefined,
-      max_parallel_requests: form.max_parallel_requests ? Number(form.max_parallel_requests) : undefined,
-      metadata: Object.keys(metadata).length ? metadata : undefined,
-      models: form.models
-    });
+    const editingId = editingKey ? keyIdentifier(editingKey) : "";
+    const payload = keyPayload(form, Boolean(editingKey));
     try {
-      const result = await api<Record<string, unknown>>("/api/keys", { method: "POST", body: payload });
-      setCreatedKey(String(result.key || result.token || ""));
-      setForm({
-        key_alias: "",
-        team_id: "",
-        max_budget: "",
-        resetBudget: false,
-        budgetResetAmount: 30,
-        budgetResetUnit: "d",
-        max_tps: "",
-        max_tpm: "",
-        max_parallel_requests: "",
-        tokenBudget: false,
-        tokenBudgetTokens: "",
-        tokenBudgetReset: false,
-        tokenBudgetResetAmount: 30,
-        tokenBudgetResetUnit: "d",
-        accessSchedule: false,
-        accessTimezone: "America/Sao_Paulo",
-        accessDays: [1, 2, 3, 4, 5],
-        accessHours: false,
-        accessStart: "09:00",
-        accessEnd: "17:00",
-        expires: false,
-        durationAmount: 30,
-        durationUnit: "d",
-        models: []
-      });
+      if (editingId) {
+        await api(`/api/keys/${encodeURIComponent(editingId)}`, { method: "PATCH", body: payload });
+        closeKeyModal();
+      } else {
+        const result = await api<Record<string, unknown>>("/api/keys", { method: "POST", body: payload });
+        setCreatedKey(String(result.key || result.token || ""));
+        setForm(defaultKeyForm);
+      }
       reload();
     } finally {
       setCreating(false);
@@ -291,9 +276,25 @@ function KeysPage() {
     setForm({ ...form, accessDays: nextDays });
   }
 
-  function closeCreateModal() {
+  function openCreateModal() {
+    setForm(defaultKeyForm);
+    setCreatedKey("");
+    setEditingKey(null);
+    setCreateOpen(true);
+  }
+
+  function openEditModal(row: ApiKeyListRow) {
+    setForm(keyFormFromRow(normalizeKeyRow(row)));
+    setCreatedKey("");
+    setEditingKey(row);
+    setCreateOpen(true);
+  }
+
+  function closeKeyModal() {
     setCreateOpen(false);
     setCreatedKey("");
+    setEditingKey(null);
+    setForm(defaultKeyForm);
   }
 
   async function deleteKey(row: ApiKeyListRow) {
@@ -314,17 +315,17 @@ function KeysPage() {
         icon={<KeyRound size={22} />}
         title="Keys"
         tone="amber"
-        action={<div className="header-actions"><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button><button className="primary" onClick={() => setCreateOpen(true)}><Plus size={16} /> Create key</button></div>}
+        action={<div className="header-actions"><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button><button className="primary" onClick={openCreateModal}><Plus size={16} /> Create key</button></div>}
       />
       {createOpen ? (
-        <Modal title="Create key" onClose={closeCreateModal}>
+        <Modal title={editingKey ? "Edit key" : "Create key"} onClose={closeKeyModal}>
           {createdKey ? (
             <div className="modal-stack">
               <div className="secret"><code>{createdKey}</code><button className="secondary" onClick={() => navigator.clipboard.writeText(createdKey)}><Copy size={16} /> Copy</button></div>
-              <div className="modal-actions"><button className="primary" onClick={closeCreateModal}>Done</button></div>
+              <div className="modal-actions"><button className="primary" onClick={closeKeyModal}>Done</button></div>
             </div>
           ) : (
-            <form className="modal-form" onSubmit={createKey}>
+            <form className="modal-form" onSubmit={submitKey}>
               <label>Alias<input placeholder="Production app" value={form.key_alias} onChange={(e) => setForm({ ...form, key_alias: e.target.value })} /></label>
               <label>Team
                 <select value={form.team_id} onChange={(e) => setForm({ ...form, team_id: e.target.value })} disabled={teamsResource.loading}>
@@ -358,7 +359,10 @@ function KeysPage() {
                   <p className="field-note compact">Budget does not reset.</p>
                 )}
               </div>
-              <div className="expiration-field">
+              {editingKey ? (
+                <label className="toggle-row"><input type="checkbox" checked={form.blocked} onChange={(e) => setForm({ ...form, blocked: e.target.checked })} /> <span>Block key</span></label>
+              ) : null}
+              {!editingKey ? <div className="expiration-field">
                 <label className="toggle-row"><input type="checkbox" checked={form.expires} onChange={(e) => setForm({ ...form, expires: e.target.checked })} /> <span>Set expiration</span></label>
                 {form.expires ? (
                   <div className="duration-controls">
@@ -382,7 +386,7 @@ function KeysPage() {
                 ) : (
                   <p className="field-note compact">This key will not expire.</p>
                 )}
-              </div>
+              </div> : null}
               <fieldset className="config-section">
                 <span className="field-label">Rate limits</span>
                 <div className="config-grid">
@@ -483,7 +487,7 @@ function KeysPage() {
                   ))}
                 </div>
               </fieldset>
-              <div className="modal-actions"><button type="button" className="secondary" onClick={closeCreateModal}>Cancel</button><button className="primary" disabled={creating || scheduleInvalid}>{creating ? "Creating" : "Create key"}</button></div>
+              <div className="modal-actions"><button type="button" className="secondary" onClick={closeKeyModal}>Cancel</button><button className="primary" disabled={creating || scheduleInvalid}>{creating ? (editingKey ? "Saving" : "Creating") : (editingKey ? "Save changes" : "Create key")}</button></div>
             </form>
           )}
         </Modal>
@@ -503,7 +507,12 @@ function KeysPage() {
               <td>{currency(row.spend || 0)}</td>
               <td>{row.max_budget ? currency(row.max_budget) : "-"}</td>
               <td><StatusBadge blocked={Boolean(row.blocked)} /></td>
-              <td><button className="icon danger" onClick={() => deleteKey(rawRow)} title="Delete key" disabled={!key || deletingKey === key}><Trash2 size={16} /></button></td>
+              <td>
+                <div className="row-actions">
+                  <button className="icon" onClick={() => openEditModal(rawRow)} title="Edit key" disabled={!key}><Pencil size={16} /></button>
+                  <button className="icon danger" onClick={() => deleteKey(rawRow)} title="Delete key" disabled={!key || deletingKey === key}><Trash2 size={16} /></button>
+                </div>
+              </td>
             </tr>
             );
           })}</tbody>
@@ -674,6 +683,95 @@ async function api<T>(path: string, options: { method?: string; body?: unknown }
 
 function clean<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined && item !== "")) as T;
+}
+
+function keyPayload(form: KeyFormState, editing: boolean): Record<string, unknown> {
+  const metadata = clean({
+    huawei_token_budget: form.tokenBudget ? clean({
+      max_tokens: Number(form.tokenBudgetTokens),
+      reset_duration: form.tokenBudgetReset ? `${form.tokenBudgetResetAmount}${form.tokenBudgetResetUnit}` : undefined,
+      counts: "total_tokens"
+    }) : undefined,
+    huawei_time_access: form.accessSchedule ? clean({
+      timezone: form.accessTimezone,
+      rules: [
+        clean({
+          days: form.accessDays,
+          start: form.accessHours ? form.accessStart : undefined,
+          end: form.accessHours ? form.accessEnd : undefined
+        })
+      ]
+    }) : undefined
+  });
+  return clean({
+    key_alias: form.key_alias || (editing ? null : undefined),
+    team_id: form.team_id || (editing ? null : undefined),
+    duration: !editing && form.expires ? `${form.durationAmount}${form.durationUnit}` : undefined,
+    max_budget: form.max_budget ? Number(form.max_budget) : (editing ? null : undefined),
+    budget_duration: form.resetBudget ? `${form.budgetResetAmount}${form.budgetResetUnit}` : (editing ? null : undefined),
+    rpm_limit: form.max_tps ? Math.ceil(Number(form.max_tps) * 60) : (editing ? null : undefined),
+    tpm_limit: form.max_tpm ? Number(form.max_tpm) : (editing ? null : undefined),
+    max_parallel_requests: form.max_parallel_requests ? Number(form.max_parallel_requests) : (editing ? null : undefined),
+    metadata: Object.keys(metadata).length ? metadata : (editing ? {} : undefined),
+    blocked: editing ? form.blocked : undefined,
+    models: form.models
+  });
+}
+
+function keyFormFromRow(row: ApiKeyRow): KeyFormState {
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const tokenBudget = objectField(metadata, "huawei_token_budget");
+  const timeAccess = objectField(metadata, "huawei_time_access");
+  const firstRule = Array.isArray(timeAccess.rules) && timeAccess.rules[0] && typeof timeAccess.rules[0] === "object"
+    ? timeAccess.rules[0] as Record<string, unknown>
+    : {};
+  const budgetDuration = parseDurationValue(row.budget_duration);
+  const tokenReset = parseDurationValue(stringField(tokenBudget, "reset_duration"));
+  const accessDays = Array.isArray(firstRule.days) ? firstRule.days.filter((day): day is number => typeof day === "number") : defaultKeyForm.accessDays;
+  const accessStart = typeof firstRule.start === "string" ? firstRule.start : defaultKeyForm.accessStart;
+  const accessEnd = typeof firstRule.end === "string" ? firstRule.end : defaultKeyForm.accessEnd;
+  return {
+    ...defaultKeyForm,
+    key_alias: row.key_alias || "",
+    team_id: row.team_id || "",
+    max_budget: row.max_budget == null ? "" : String(row.max_budget),
+    resetBudget: Boolean(row.budget_duration),
+    budgetResetAmount: budgetDuration.amount,
+    budgetResetUnit: budgetDuration.unit,
+    max_tps: row.rpm_limit ? String(row.rpm_limit / 60) : "",
+    max_tpm: row.tpm_limit == null ? "" : String(row.tpm_limit),
+    max_parallel_requests: row.max_parallel_requests == null ? "" : String(row.max_parallel_requests),
+    tokenBudget: tokenBudget.max_tokens != null,
+    tokenBudgetTokens: tokenBudget.max_tokens == null ? "" : String(tokenBudget.max_tokens),
+    tokenBudgetReset: Boolean(tokenBudget.reset_duration),
+    tokenBudgetResetAmount: tokenReset.amount,
+    tokenBudgetResetUnit: tokenReset.unit,
+    accessSchedule: Object.keys(timeAccess).length > 0,
+    accessTimezone: stringField(timeAccess, "timezone") || defaultKeyForm.accessTimezone,
+    accessDays: accessDays.length ? accessDays : defaultKeyForm.accessDays,
+    accessHours: typeof firstRule.start === "string" && typeof firstRule.end === "string",
+    accessStart,
+    accessEnd,
+    blocked: Boolean(row.blocked),
+    models: row.models || []
+  };
+}
+
+function parseDurationValue(value: unknown): { amount: number; unit: DurationUnit } {
+  if (typeof value !== "string" || value.length < 2) return { amount: 30, unit: "d" };
+  const unit = value.slice(-1);
+  const amount = Number(value.slice(0, -1));
+  if (!["m", "h", "d"].includes(unit) || !Number.isFinite(amount) || amount <= 0) return { amount: 30, unit: "d" };
+  return { amount, unit: unit as DurationUnit };
+}
+
+function objectField(value: Record<string, unknown>, key: string): Record<string, unknown> {
+  const field = value[key];
+  return field && typeof field === "object" && !Array.isArray(field) ? field as Record<string, unknown> : {};
+}
+
+function stringField(value: Record<string, unknown>, key: string): string | null {
+  return typeof value[key] === "string" && value[key] ? value[key] : null;
 }
 
 function normalizeKeyRow(row: ApiKeyListRow): ApiKeyRow {

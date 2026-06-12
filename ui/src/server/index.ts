@@ -62,6 +62,15 @@ app.post("/api/keys", async (request, reply) => {
   });
 });
 
+app.patch("/api/keys/:key", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ key: z.string().min(1) }).parse(request.params);
+  return litellm.request("/key/update", session.litellmKey, {
+    method: "POST",
+    body: JSON.stringify({ ...(request.body as Record<string, unknown> || {}), key: params.key })
+  });
+});
+
 app.delete("/api/keys", async (request, reply) => {
   const session = await requireSession(request, reply);
   const body = z.object({ keys: z.array(z.string()).optional(), key_aliases: z.array(z.string()).optional() }).parse(request.body || {});

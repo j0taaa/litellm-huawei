@@ -11,8 +11,13 @@ export type ApiKeyRow = {
   user_id?: string | null;
   team_id?: string | null;
   models?: string[];
+  metadata?: Record<string, unknown> | null;
   spend?: number;
   max_budget?: number | null;
+  budget_duration?: string | null;
+  rpm_limit?: number | null;
+  tpm_limit?: number | null;
+  max_parallel_requests?: number | null;
   expires?: string | null;
   blocked?: boolean | null;
 };

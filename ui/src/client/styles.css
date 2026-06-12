@@ -135,6 +135,7 @@ nav { display: grid; align-content: start; gap: 8px; }
 .danger { color: #b4233a; }
 .icon { width: 34px; padding: 0; background: transparent; }
 .icon:hover { background: #f3f6f5; }
+.row-actions { display: inline-flex; align-items: center; gap: 4px; }
 
 .metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 .metric, .panel {

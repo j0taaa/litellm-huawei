@@ -15,6 +15,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Keys" })).toBeVisible();
   await expect(page).toHaveURL(/\/keys$/);
   let createPayload: Record<string, any> | undefined;
+  let updatePayload: Record<string, any> | undefined;
+  let updateUrl = "";
   let deletePayload: Record<string, any> | undefined;
   await page.route("**/api/keys**", async (route) => {
     const method = route.request().method();
@@ -23,7 +25,21 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          keys: [{ token: "hash-delete-test", key_name: "sk-...test", key_alias: "Delete test", spend: 0, max_budget: null, blocked: false }]
+          keys: [{
+            token: "hash-delete-test",
+            key_name: "sk-...test",
+            key_alias: "Delete test",
+            spend: 0,
+            max_budget: 25,
+            rpm_limit: 120,
+            tpm_limit: 1000,
+            max_parallel_requests: 2,
+            models: ["deepseek-v4-flash"],
+            metadata: {
+              huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] }
+            },
+            blocked: false
+          }]
         })
       });
       return;
@@ -31,6 +47,12 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     if (method === "POST") {
       createPayload = route.request().postDataJSON();
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ key: "sk-test-schedule" }) });
+      return;
+    }
+    if (method === "PATCH") {
+      updateUrl = route.request().url();
+      updatePayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
       return;
     }
     if (method === "DELETE") {
@@ -98,6 +120,30 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   });
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByText("Delete test")).toBeVisible();
+  await page.getByTitle("Edit key").first().click();
+  await expect(page.getByRole("dialog", { name: "Edit key" })).toBeVisible();
+  await expect(page.getByPlaceholder("Production app")).toHaveValue("Delete test");
+  await expect(page.getByLabel("Budget USD")).toHaveValue("25");
+  await expect(page.getByLabel("Max TPS")).toHaveValue("2");
+  await expect(page.getByLabel("Max TPM")).toHaveValue("1000");
+  await expect(page.getByLabel("Max parallel")).toHaveValue("2");
+  await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
+  await page.getByPlaceholder("Production app").fill("Edited key");
+  await page.getByLabel("Block key").check();
+  await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
+  expect(updateUrl).toContain("/api/keys/hash-delete-test");
+  expect(updatePayload).toMatchObject({
+    key_alias: "Edited key",
+    max_budget: 25,
+    rpm_limit: 120,
+    tpm_limit: 1000,
+    max_parallel_requests: 2,
+    blocked: true,
+    models: ["deepseek-v4-flash"],
+    metadata: {
+      huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] }
+    }
+  });
   await page.getByTitle("Delete key").first().click();
   expect(deletePayload).toEqual({ keys: ["hash-delete-test"] });
 
