@@ -64,8 +64,15 @@ export type StatsSummary = {
     teams: number;
     models: number;
   };
-  byModel: Array<{ name: string; spend: number; requests: number }>;
-  byKey: Array<{ name: string; spend: number; requests: number }>;
-  byTeam: Array<{ name: string; spend: number; requests: number }>;
+  byModel: StatsBreakdownRow[];
+  byKey: StatsBreakdownRow[];
+  byTeam: StatsBreakdownRow[];
   recent: Array<Record<string, unknown>>;
+};
+
+export type StatsBreakdownRow = {
+  id?: string;
+  name: string;
+  spend: number;
+  requests: number;
 };

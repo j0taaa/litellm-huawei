@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeStats } from "../src/server/stats";
+import { filterSpendLogsByKey, summarizeStats } from "../src/server/stats";
 
 describe("summarizeStats", () => {
   it("groups spend logs by model, key, and team", () => {
@@ -22,6 +22,17 @@ describe("summarizeStats", () => {
     expect(summary.byModel[0]).toMatchObject({ name: "glm-5.1", requests: 2 });
     expect(summary.recent[0].model).toBe("glm-5.1");
     expect(summary.byKey.find((row) => row.name === "key-a")?.spend).toBeCloseTo(0.3);
+    expect(summary.byKey.find((row) => row.name === "key-a")?.id).toBe("key-a");
     expect(summary.byTeam.find((row) => row.name === "team-a")?.requests).toBe(2);
+  });
+
+  it("filters spend logs by key", () => {
+    const logs = [
+      { api_key: "key-a", spend: 0.1 },
+      { api_key: "key-b", spend: 0.2 },
+      { key_alias: "key-a", spend: 0.3 }
+    ];
+
+    expect(filterSpendLogsByKey(logs, "key-a")).toEqual([logs[0], logs[2]]);
   });
 });

@@ -1,4 +1,4 @@
-import type { StatsSummary } from "../shared/types.js";
+import type { StatsBreakdownRow, StatsSummary } from "../shared/types.js";
 
 export function summarizeStats(input: {
   spendLogs: Array<Record<string, unknown>>;
@@ -6,16 +6,16 @@ export function summarizeStats(input: {
   teams: Array<Record<string, unknown>>;
   models: Array<Record<string, unknown>>;
 }): StatsSummary {
-  const byModel = new Map<string, { name: string; spend: number; requests: number }>();
-  const byKey = new Map<string, { name: string; spend: number; requests: number }>();
-  const byTeam = new Map<string, { name: string; spend: number; requests: number }>();
+  const byModel = new Map<string, StatsBreakdownRow>();
+  const byKey = new Map<string, StatsBreakdownRow>();
+  const byTeam = new Map<string, StatsBreakdownRow>();
   let spend = 0;
 
   for (const log of input.spendLogs) {
     const cost = numberField(log, "spend") || numberField(log, "response_cost") || 0;
     spend += cost;
     add(byModel, displayModelName(stringField(log, "model") || "unknown"), cost);
-    add(byKey, stringField(log, "api_key") || stringField(log, "key_alias") || "unknown", cost);
+    add(byKey, statsKey(log), cost);
     add(byTeam, stringField(log, "team_id") || "none", cost);
   }
 
@@ -37,11 +37,19 @@ export function summarizeStats(input: {
   };
 }
 
-function add(map: Map<string, { name: string; spend: number; requests: number }>, name: string, spend: number): void {
-  const current = map.get(name) || { name, spend: 0, requests: 0 };
+export function filterSpendLogsByKey(spendLogs: Array<Record<string, unknown>>, key: string): Array<Record<string, unknown>> {
+  return spendLogs.filter((log) => statsKey(log) === key);
+}
+
+function add(map: Map<string, StatsBreakdownRow>, name: string, spend: number): void {
+  const current = map.get(name) || { id: name, name, spend: 0, requests: 0 };
   current.spend += spend;
   current.requests += 1;
   map.set(name, current);
+}
+
+function statsKey(log: Record<string, unknown>): string {
+  return stringField(log, "api_key") || stringField(log, "key_alias") || "unknown";
 }
 
 function stringField(value: Record<string, unknown>, key: string): string | null {

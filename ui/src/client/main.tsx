@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3, LogOut, Pencil, Plus, RefreshCcw, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
-import type { ApiKeyListRow, ApiKeyRow, ModelInfo, SessionUser, StatsSummary, TeamRow } from "../shared/types";
+import type { ApiKeyListRow, ApiKeyRow, ModelInfo, SessionUser, StatsBreakdownRow, StatsSummary, TeamRow } from "../shared/types";
 import "./styles.css";
 
-type RoutePath = "/stats" | "/keys" | "/teams";
+type RoutePath = "/stats" | "/keys" | "/teams" | `/stats/keys/${string}`;
 type Tone = "green" | "blue" | "amber" | "violet" | "rose";
 type DurationUnit = "m" | "h" | "d";
 
@@ -86,10 +86,10 @@ const defaultKeyForm: KeyFormState = {
   models: []
 };
 
-const routes: Array<{ path: RoutePath; label: string; icon: React.ReactNode; page: React.ReactNode }> = [
-  { path: "/stats", label: "Stats", icon: <BarChart3 size={18} />, page: <StatsPage /> },
-  { path: "/keys", label: "Keys", icon: <KeyRound size={18} />, page: <KeysPage /> },
-  { path: "/teams", label: "Teams", icon: <Users size={18} />, page: <TeamsPage /> }
+const routes: Array<{ path: "/stats" | "/keys" | "/teams"; label: string; icon: React.ReactNode }> = [
+  { path: "/stats", label: "Stats", icon: <BarChart3 size={18} /> },
+  { path: "/keys", label: "Keys", icon: <KeyRound size={18} /> },
+  { path: "/teams", label: "Teams", icon: <Users size={18} /> }
 ];
 
 function App() {
@@ -106,10 +106,10 @@ function App() {
 
   if (loading) return <div className="boot">Loading</div>;
   if (!session) return <Login onLogin={(nextSession) => { setSession(nextSession); navigate(normalizeRoute(window.location.pathname)); }} />;
-  const activeRoute = routes.find((item) => item.path === route) || routes[0];
+  const activeRoute = activeNavRoute(route);
   return (
-    <AppLayout session={session} route={activeRoute.path} onNavigate={navigate} onLogout={() => setSession(null)}>
-      {activeRoute.page}
+    <AppLayout session={session} route={activeRoute} onNavigate={navigate} onLogout={() => setSession(null)}>
+      {renderRoute(route, navigate)}
     </AppLayout>
   );
 }
@@ -201,7 +201,22 @@ function NavLink({ active, icon, label, path, onNavigate }: { active: boolean; i
   );
 }
 
-function StatsPage() {
+function renderRoute(route: RoutePath, navigate: (path: RoutePath) => void): React.ReactNode {
+  if (route.startsWith("/stats/keys/")) {
+    return <KeyStatsPage keyId={decodeURIComponent(route.slice("/stats/keys/".length))} onBack={() => navigate("/stats")} />;
+  }
+  if (route === "/keys") return <KeysPage />;
+  if (route === "/teams") return <TeamsPage />;
+  return <StatsPage onNavigate={navigate} />;
+}
+
+function activeNavRoute(route: RoutePath): "/stats" | "/keys" | "/teams" {
+  if (route.startsWith("/stats")) return "/stats";
+  if (route === "/keys" || route === "/teams") return route;
+  return "/stats";
+}
+
+function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => void }) {
   const { data, loading, reload } = useResource<StatsSummary>("/api/stats");
   return (
     <section>
@@ -217,10 +232,45 @@ function StatsPage() {
           </div>
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="By model" rows={data.byModel} />
-            <Breakdown icon={<KeyRound size={16} />} tone="amber" title="By key" rows={data.byKey} />
+            <Breakdown icon={<KeyRound size={16} />} tone="amber" title="By key" rows={data.byKey} onRowClick={(row) => onNavigate(`/stats/keys/${encodeURIComponent(row.id || row.name)}`)} />
             <Breakdown icon={<Users size={16} />} tone="violet" title="By team" rows={data.byTeam} />
           </div>
           <DataTable icon={<Activity size={16} />} title="Recent spend logs" rows={data.recent} columns={["startTime", "model", "api_key", "team_id", "spend"]} />
+        </>
+      )}
+    </section>
+  );
+}
+
+function KeyStatsPage({ keyId, onBack }: { keyId: string; onBack: () => void }) {
+  const { data, loading, reload } = useResource<StatsSummary>(`/api/stats/keys/${encodeURIComponent(keyId)}`);
+  return (
+    <section>
+      <Header
+        icon={<KeyRound size={22} />}
+        title="Key stats"
+        tone="amber"
+        action={<div className="header-actions"><button className="secondary" onClick={onBack}>Back to stats</button><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button></div>}
+      />
+      <div className="detail-heading">
+        <span className="muted">API key</span>
+        <code>{keyId}</code>
+      </div>
+      {loading || !data ? <EmptyState text="Loading key stats" /> : (
+        <>
+          <div className="metrics">
+            <Metric icon={<DollarSign size={18} />} tone="green" label="Spend" value={currency(data.totals.spend)} />
+            <Metric icon={<Activity size={18} />} tone="blue" label="Requests" value={String(data.totals.requests)} />
+            <Metric icon={<Layers3 size={18} />} tone="rose" label="Models" value={String(data.byModel.length)} />
+            <Metric icon={<Users size={18} />} tone="violet" label="Teams" value={String(data.byTeam.length)} />
+            <Metric icon={<KeyRound size={18} />} tone="amber" label="Key rows" value={String(data.byKey.length)} />
+          </div>
+          <div className="grid3">
+            <Breakdown icon={<Layers3 size={16} />} tone="rose" title="Models" rows={data.byModel} />
+            <Breakdown icon={<Users size={16} />} tone="violet" title="Teams" rows={data.byTeam} />
+            <Breakdown icon={<Activity size={16} />} tone="blue" title="Requests" rows={data.byKey} />
+          </div>
+          <DataTable icon={<Activity size={16} />} title="Recent key spend logs" rows={data.recent} columns={["startTime", "model", "api_key", "team_id", "spend"]} />
         </>
       )}
     </section>
@@ -624,8 +674,20 @@ function Metric({ icon, tone, label, value }: { icon: React.ReactNode; tone: Ton
   return <div className={`metric ${tone}`}><div className="metric-top"><span className="metric-icon">{icon}</span><span>{label}</span></div><strong>{value}</strong></div>;
 }
 
-function Breakdown({ icon, tone, title, rows }: { icon: React.ReactNode; tone: Tone; title: string; rows: Array<{ name: string; spend: number; requests: number }> }) {
-  return <div className={`panel ${tone}`}><PanelTitle icon={icon} title={title} />{rows.length ? rows.slice(0, 8).map((row) => <div className="bar-row" key={row.name}><span>{row.name}</span><strong>{currency(row.spend)}</strong></div>) : <p className="muted">No data</p>}</div>;
+function Breakdown({ icon, tone, title, rows, onRowClick }: { icon: React.ReactNode; tone: Tone; title: string; rows: StatsBreakdownRow[]; onRowClick?: (row: StatsBreakdownRow) => void }) {
+  return (
+    <div className={`panel ${tone}`}>
+      <PanelTitle icon={icon} title={title} />
+      {rows.length ? rows.slice(0, 8).map((row) => {
+        const content = <><span>{row.name}</span><strong>{currency(row.spend)}</strong></>;
+        return onRowClick ? (
+          <button className="bar-row clickable" key={row.id || row.name} onClick={() => onRowClick(row)}>{content}</button>
+        ) : (
+          <div className="bar-row" key={row.id || row.name}>{content}</div>
+        );
+      }) : <p className="muted">No data</p>}
+    </div>
+  );
 }
 
 function DataTable({ icon, title, rows, columns }: { icon: React.ReactNode; title: string; rows: Array<Record<string, unknown>>; columns: string[] }) {
@@ -671,6 +733,7 @@ function useRoute() {
 }
 
 function normalizeRoute(pathname: string): RoutePath {
+  if (pathname.startsWith("/stats/keys/") && pathname.length > "/stats/keys/".length) return pathname as RoutePath;
   return routes.some((item) => item.path === pathname) ? pathname as RoutePath : "/stats";
 }
 

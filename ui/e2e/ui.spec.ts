@@ -197,3 +197,29 @@ test("direct route keeps destination after login", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Keys" })).toBeVisible();
   await expect(page).toHaveURL(/\/keys$/);
 });
+
+test("opens key stats from stats breakdown", async ({ page }) => {
+  const summary = {
+    totals: { spend: 0.3, requests: 2, keys: 1, teams: 1, models: 1 },
+    byModel: [{ id: "glm-5.1", name: "glm-5.1", spend: 0.3, requests: 2 }],
+    byKey: [{ id: "key-a", name: "key-a", spend: 0.3, requests: 2 }],
+    byTeam: [{ id: "team-a", name: "team-a", spend: 0.3, requests: 2 }],
+    recent: [{ startTime: "2026-06-12T18:00:00Z", model: "glm-5.1", api_key: "key-a", team_id: "team-a", spend: 0.3 }]
+  };
+  await page.route("**/api/stats**", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(summary) });
+  });
+
+  await page.goto("/stats");
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("sk-huawei-maas-local");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByRole("heading", { name: "Stats" })).toBeVisible();
+  await page.getByRole("button", { name: /key-a/ }).click();
+  await expect(page).toHaveURL(/\/stats\/keys\/key-a$/);
+  await expect(page.getByRole("heading", { name: "Key stats" })).toBeVisible();
+  await expect(page.getByText("API key")).toBeVisible();
+  await expect(page.locator(".detail-heading code")).toHaveText("key-a");
+  await expect(page.getByText("Recent key spend logs")).toBeVisible();
+});

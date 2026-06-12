@@ -172,7 +172,23 @@ nav { display: grid; align-content: start; gap: 8px; }
 .bar-row { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid #eef2f0; font-size: 13px; }
 .bar-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-row strong { color: #315348; }
+.bar-row.clickable {
+  width: 100%;
+  background: transparent;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  color: inherit;
+}
+.bar-row.clickable:hover { background: #f6fbf9; }
 .wide { overflow-x: auto; }
+
+.detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -6px 0 16px;
+}
 
 .toolbar {
   display: grid;
