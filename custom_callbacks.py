@@ -16,6 +16,7 @@ from litellm.integrations.custom_logger import CustomLogger
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from huawei_litellm.pricing import find_model, model_cost_usd
+from huawei_litellm.time_access import is_time_access_allowed, time_access_from_metadata
 from huawei_litellm.token_budget import estimate_request_tokens, parse_duration, token_budget_from_metadata
 
 
@@ -30,7 +31,21 @@ class HuaweiMaaSCostLogger(CustomLogger):
         self.reservation_ttl_seconds = int(os.environ.get("HUAWEI_TOKEN_BUDGET_RESERVATION_TTL_SECONDS", "3600"))
 
     async def async_pre_call_hook(self, user_api_key_dict, cache, data: dict, call_type: str):
-        budget = token_budget_from_metadata(_auth_metadata(user_api_key_dict))
+        auth_metadata = _auth_metadata(user_api_key_dict)
+        try:
+            time_access = time_access_from_metadata(auth_metadata)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "time_access_invalid_config", "message": str(exc)},
+            ) from exc
+        if time_access is not None and not is_time_access_allowed(time_access):
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "time_access_denied", "timezone": time_access.timezone},
+            )
+
+        budget = token_budget_from_metadata(auth_metadata)
         if budget is None:
             return data
 

@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Any
 
 
-def request_json(base_url: str, path: str, master_key: str, method: str = "GET", payload: Any | None = None) -> Any:
+def request_json(
+    base_url: str,
+    path: str,
+    master_key: str,
+    method: str = "GET",
+    payload: Any | None = None,
+    ignore_statuses: set[int] | None = None,
+) -> Any:
     data = None
     headers = {
         "Authorization": f"Bearer {master_key}",
@@ -19,9 +26,14 @@ def request_json(base_url: str, path: str, master_key: str, method: str = "GET",
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(base_url.rstrip("/") + path, data=data, headers=headers, method=method)
-    with urllib.request.urlopen(request, timeout=30) as response:
-        raw = response.read().decode("utf-8")
-        return json.loads(raw) if raw else None
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            raw = response.read().decode("utf-8")
+            return json.loads(raw) if raw else None
+    except urllib.error.HTTPError as exc:
+        if ignore_statuses and exc.code in ignore_statuses:
+            return None
+        raise
 
 
 def wait_for_ready(base_url: str, timeout_seconds: int) -> None:
@@ -42,12 +54,22 @@ def seed_models(base_url: str, master_key: str, seed_path: Path) -> None:
     info = request_json(base_url, "/model/info", master_key)
     for item in info.get("data", []):
         model_info = item.get("model_info") or {}
-        if model_info.get("db_model") and model_info.get("huawei_maas"):
+        if model_info.get("huawei_maas"):
             request_json(base_url, "/model/delete", master_key, method="POST", payload={"id": model_info["id"]})
 
     for model in models:
         model = json.loads(json.dumps(model))
-        model["model_info"]["id"] = "huawei-maas-" + model["model_name"].replace(".", "-")
+        model_id = "huawei-maas-" + model["model_name"].replace(".", "-")
+        request_json(
+            base_url,
+            "/model/delete",
+            master_key,
+            method="POST",
+            payload={"id": model_id},
+            ignore_statuses={400, 404},
+        )
+        model["model_info"]["id"] = model_id
+        model["model_info"]["db_model"] = True
         request_json(base_url, "/model/new", master_key, method="POST", payload=model)
         print(f"seeded Huawei MaaS model {model['model_name']}", flush=True)
 

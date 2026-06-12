@@ -1,12 +1,33 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, BarChart3, Copy, DollarSign, KeyRound, Layers3, LogOut, Plus, RefreshCcw, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3, LogOut, Plus, RefreshCcw, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
 import type { ApiKeyRow, ModelInfo, SessionUser, StatsSummary, TeamRow } from "../shared/types";
 import "./styles.css";
 
 type RoutePath = "/stats" | "/keys" | "/teams";
 type Tone = "green" | "blue" | "amber" | "violet" | "rose";
 type DurationUnit = "m" | "h" | "d";
+
+const weekDays = [
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+  { value: 7, label: "Sun" }
+];
+
+const timezones = [
+  "Asia/Shanghai",
+  "UTC",
+  "America/New_York",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Europe/Berlin",
+  "Asia/Singapore",
+  "Asia/Tokyo"
+];
 
 const routes: Array<{ path: RoutePath; label: string; icon: React.ReactNode; page: React.ReactNode }> = [
   { path: "/stats", label: "Stats", icon: <BarChart3 size={18} />, page: <StatsPage /> },
@@ -171,6 +192,12 @@ function KeysPage() {
     tokenBudgetReset: false,
     tokenBudgetResetAmount: 30,
     tokenBudgetResetUnit: "d" as DurationUnit,
+    accessSchedule: false,
+    accessTimezone: "Asia/Shanghai",
+    accessDays: [1, 2, 3, 4, 5] as number[],
+    accessHours: false,
+    accessStart: "09:00",
+    accessEnd: "17:00",
     expires: false,
     durationAmount: 30,
     durationUnit: "d" as DurationUnit,
@@ -179,10 +206,28 @@ function KeysPage() {
   const keys = data?.keys || data?.data || [];
   const modelNames = (models.data?.data || []).map((model) => model.model_name);
   const teams = Array.isArray(teamsResource.data) ? teamsResource.data : teamsResource.data?.teams || teamsResource.data?.data || [];
+  const scheduleInvalid = form.accessSchedule && form.accessDays.length === 0;
 
   async function createKey(event: React.FormEvent) {
     event.preventDefault();
     setCreating(true);
+    const metadata = clean({
+      huawei_token_budget: form.tokenBudget ? clean({
+        max_tokens: Number(form.tokenBudgetTokens),
+        reset_duration: form.tokenBudgetReset ? `${form.tokenBudgetResetAmount}${form.tokenBudgetResetUnit}` : undefined,
+        counts: "total_tokens"
+      }) : undefined,
+      huawei_time_access: form.accessSchedule ? clean({
+        timezone: form.accessTimezone,
+        rules: [
+          clean({
+            days: form.accessDays,
+            start: form.accessHours ? form.accessStart : undefined,
+            end: form.accessHours ? form.accessEnd : undefined
+          })
+        ]
+      }) : undefined
+    });
     const payload = clean({
       key_alias: form.key_alias || undefined,
       team_id: form.team_id || undefined,
@@ -192,13 +237,7 @@ function KeysPage() {
       rpm_limit: form.max_tps ? Math.ceil(Number(form.max_tps) * 60) : undefined,
       tpm_limit: form.max_tpm ? Number(form.max_tpm) : undefined,
       max_parallel_requests: form.max_parallel_requests ? Number(form.max_parallel_requests) : undefined,
-      metadata: form.tokenBudget ? clean({
-        huawei_token_budget: clean({
-          max_tokens: Number(form.tokenBudgetTokens),
-          reset_duration: form.tokenBudgetReset ? `${form.tokenBudgetResetAmount}${form.tokenBudgetResetUnit}` : undefined,
-          counts: "total_tokens"
-        })
-      }) : undefined,
+      metadata: Object.keys(metadata).length ? metadata : undefined,
       models: form.models
     });
     try {
@@ -219,6 +258,12 @@ function KeysPage() {
         tokenBudgetReset: false,
         tokenBudgetResetAmount: 30,
         tokenBudgetResetUnit: "d",
+        accessSchedule: false,
+        accessTimezone: "Asia/Shanghai",
+        accessDays: [1, 2, 3, 4, 5],
+        accessHours: false,
+        accessStart: "09:00",
+        accessEnd: "17:00",
         expires: false,
         durationAmount: 30,
         durationUnit: "d",
@@ -235,6 +280,13 @@ function KeysPage() {
       ? form.models.filter((name) => name !== modelName)
       : [...form.models, modelName];
     setForm({ ...form, models: nextModels });
+  }
+
+  function toggleAccessDay(day: number) {
+    const nextDays = form.accessDays.includes(day)
+      ? form.accessDays.filter((value) => value !== day)
+      : [...form.accessDays, day].sort((left, right) => left - right);
+    setForm({ ...form, accessDays: nextDays });
   }
 
   function closeCreateModal() {
@@ -368,6 +420,44 @@ function KeysPage() {
                   <p className="field-note compact">No total token budget is enforced.</p>
                 )}
               </fieldset>
+              <fieldset className="config-section">
+                <span className="field-label section-title"><CalendarClock size={16} /> Access schedule</span>
+                <label className="toggle-row"><input type="checkbox" checked={form.accessSchedule} onChange={(e) => setForm({ ...form, accessSchedule: e.target.checked })} /> <span>Restrict access by schedule</span></label>
+                {form.accessSchedule ? (
+                  <>
+                    <div className="config-grid schedule-grid">
+                      <label>Access timezone
+                        <select value={form.accessTimezone} onChange={(e) => setForm({ ...form, accessTimezone: e.target.value })}>
+                          {timezones.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}
+                        </select>
+                      </label>
+                      <label className="toggle-row"><input type="checkbox" checked={form.accessHours} onChange={(e) => setForm({ ...form, accessHours: e.target.checked })} /> <span>Limit daily hours</span></label>
+                    </div>
+                    <div>
+                      <span className="field-label">Allowed days</span>
+                      <div className="weekday-checks">
+                        {weekDays.map((day) => (
+                          <label className="weekday-check" key={day.value}>
+                            <input type="checkbox" checked={form.accessDays.includes(day.value)} onChange={() => toggleAccessDay(day.value)} />
+                            <span>{day.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {scheduleInvalid ? <p className="field-note danger-note">Select at least one allowed day.</p> : null}
+                    </div>
+                    {form.accessHours ? (
+                      <div className="duration-controls">
+                        <label>Start time<input type="time" value={form.accessStart} onChange={(e) => setForm({ ...form, accessStart: e.target.value })} required /></label>
+                        <label>End time<input type="time" value={form.accessEnd} onChange={(e) => setForm({ ...form, accessEnd: e.target.value })} required /></label>
+                      </div>
+                    ) : (
+                      <p className="field-note compact">Allowed days are available for the full day.</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="field-note compact">This key can be used at any time.</p>
+                )}
+              </fieldset>
               <fieldset className="model-access">
                 <div className="model-access-header">
                   <span className="field-label">Model access</span>
@@ -386,7 +476,7 @@ function KeysPage() {
                   ))}
                 </div>
               </fieldset>
-              <div className="modal-actions"><button type="button" className="secondary" onClick={closeCreateModal}>Cancel</button><button className="primary" disabled={creating}>{creating ? "Creating" : "Create key"}</button></div>
+              <div className="modal-actions"><button type="button" className="secondary" onClick={closeCreateModal}>Cancel</button><button className="primary" disabled={creating || scheduleInvalid}>{creating ? "Creating" : "Create key"}</button></div>
             </form>
           )}
         </Modal>

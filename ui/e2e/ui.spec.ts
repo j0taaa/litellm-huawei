@@ -14,9 +14,19 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByRole("link", { name: "Keys" }).click();
   await expect(page.getByRole("heading", { name: "Keys" })).toBeVisible();
   await expect(page).toHaveURL(/\/keys$/);
+  let createPayload: Record<string, any> | undefined;
+  await page.route("**/api/keys", async (route) => {
+    if (route.request().method() === "POST") {
+      createPayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ key: "sk-test-schedule" }) });
+      return;
+    }
+    await route.continue();
+  });
   await page.getByRole("button", { name: "Create key" }).click();
   await expect(page.getByRole("dialog", { name: "Create key" })).toBeVisible();
   await expect(page.getByPlaceholder("Production app")).toBeVisible();
+  await page.getByPlaceholder("Production app").fill("Schedule test");
   await expect(page.getByLabel("Team")).toBeVisible();
   await expect(page.getByLabel("Team")).toHaveValue("");
   await expect(page.getByLabel("Reset budget")).not.toBeChecked();
@@ -35,6 +45,17 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("Reset token budget").check();
   await expect(page.getByLabel("Token reset every")).toHaveValue("30");
   await expect(page.getByLabel("Token reset unit")).toHaveValue("d");
+  await expect(page.getByLabel("Restrict access by schedule")).not.toBeChecked();
+  await expect(page.getByText("This key can be used at any time.")).toBeVisible();
+  await page.getByLabel("Restrict access by schedule").check();
+  await expect(page.getByLabel("Access timezone")).toHaveValue("Asia/Shanghai");
+  await expect(page.getByLabel("Mon")).toBeChecked();
+  await expect(page.getByLabel("Fri")).toBeChecked();
+  await expect(page.getByLabel("Sat")).not.toBeChecked();
+  await expect(page.getByLabel("Limit daily hours")).not.toBeChecked();
+  await page.getByLabel("Limit daily hours").check();
+  await expect(page.getByLabel("Start time")).toHaveValue("09:00");
+  await expect(page.getByLabel("End time")).toHaveValue("17:00");
   await expect(page.getByLabel("Set expiration")).not.toBeChecked();
   await expect(page.getByText("This key will not expire.")).toBeVisible();
   await page.getByLabel("Set expiration").check();
@@ -45,7 +66,20 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("deepseek-v4-flash").check();
   await expect(page.getByText("1 selected")).toBeVisible();
   await expect(page.getByLabel(/openai\//)).toHaveCount(0);
-  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create key" }).click();
+  await expect(page.getByText("sk-test-schedule")).toBeVisible();
+  expect(createPayload).toMatchObject({
+    key_alias: "Schedule test",
+    metadata: {
+      huawei_token_budget: { max_tokens: 10000, reset_duration: "30d", counts: "total_tokens" },
+      huawei_time_access: {
+        timezone: "Asia/Shanghai",
+        rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }]
+      }
+    },
+    models: ["deepseek-v4-flash"]
+  });
+  await page.getByRole("button", { name: "Done" }).click();
 
   await page.getByRole("link", { name: "Teams" }).click();
   await expect(page.getByRole("heading", { name: "Teams" })).toBeVisible();

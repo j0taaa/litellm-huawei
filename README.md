@@ -26,7 +26,7 @@ curl -H "Authorization: Bearer $LITELLM_MASTER_KEY" http://localhost:4000/v1/mod
 - `maas-ui` provides a simpler browser UI for LiteLLM login, key management, team management, and usage stats.
 - Each Huawei model routes to the MaaS OpenAI-compatible endpoint with `model: <huawei-model-id>` and `custom_llm_provider: openai`.
 - Static LiteLLM pricing is set from the first price range so standard LiteLLM metadata works.
-- `custom_callbacks.py` reads the saved catalog, logs exact Huawei MaaS cost, and enforces optional per-key Huawei token budgets stored in key metadata.
+- `custom_callbacks.py` reads the saved catalog, logs exact Huawei MaaS cost, and enforces optional per-key Huawei token budgets and access schedules stored in key metadata.
 
 ## Configuration
 
@@ -49,6 +49,23 @@ Optional:
 - `HUAWEI_TOKEN_BUDGET_RESERVATION_TTL_SECONDS`: cleanup age for stale in-flight token reservations, default `3600`.
 - `POSTGRES_DB`, `POSTGRES_USER`: Postgres database/user names.
 - `UI_PORT`, `UI_SESSION_SECRET`, `UI_SECURE_COOKIES`: simple UI bind port and session cookie settings.
+
+## Key Access Schedules
+
+The simple UI can create keys that are only usable on selected weekdays and, optionally, selected daily hours. The same restriction can be set through LiteLLM key metadata:
+
+```json
+{
+  "huawei_time_access": {
+    "timezone": "Asia/Shanghai",
+    "rules": [
+      { "days": [1, 2, 3, 4, 5], "start": "09:00", "end": "17:00" }
+    ]
+  }
+}
+```
+
+Days use ISO weekdays, where `1` is Monday and `7` is Sunday. If `start` and `end` are omitted, the key is available all day on the selected days.
 
 ## Development
 
