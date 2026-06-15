@@ -350,7 +350,7 @@ function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => void }) {
             <Metric icon={<Users size={18} />} tone="violet" label="Teams" value={String(data.totals.teams)} />
             <Metric icon={<Layers3 size={18} />} tone="rose" label="Models" value={String(data.totals.models)} />
           </div>
-          <StatsCharts modelRows={data.byModel} keyRows={data.byKey} teamRows={data.byTeam} />
+          <StatsCharts spendTitle="Spend by team" spendRows={data.byTeam} modelRows={data.byModel} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="By model" rows={data.byModel} />
             <Breakdown icon={<KeyRound size={16} />} tone="amber" title="By key" rows={data.byKey} onRowClick={(row) => onNavigate(`/stats/keys/${encodeURIComponent(row.id || row.name)}`)} />
@@ -386,7 +386,7 @@ function KeyStatsPage({ keyId, onBack }: { keyId: string; onBack: () => void }) 
             <Metric icon={<Users size={18} />} tone="violet" label="Teams" value={String(data.byTeam.length)} />
             <Metric icon={<KeyRound size={18} />} tone="amber" label="Key rows" value={String(data.byKey.length)} />
           </div>
-          <StatsCharts modelRows={data.byModel} keyRows={data.byKey} teamRows={data.byTeam} />
+          <StatsCharts spendTitle="Key spend by model" spendRows={data.byModel} modelRows={data.byModel} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="Models" rows={data.byModel} />
             <Breakdown icon={<Users size={16} />} tone="violet" title="Teams" rows={data.byTeam} />
@@ -422,7 +422,7 @@ function TeamStatsPage({ teamId, onBack }: { teamId: string; onBack: () => void 
             <Metric icon={<KeyRound size={18} />} tone="amber" label="Keys" value={String(data.byKey.length)} />
             <Metric icon={<Users size={18} />} tone="violet" label="Team rows" value={String(data.byTeam.length)} />
           </div>
-          <StatsCharts modelRows={data.byModel} keyRows={data.byKey} teamRows={data.byTeam} />
+          <StatsCharts spendTitle="Team spend by key" spendRows={data.byKey} modelRows={data.byModel} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="Models" rows={data.byModel} />
             <Breakdown icon={<KeyRound size={16} />} tone="amber" title="Keys" rows={data.byKey} />
@@ -1427,20 +1427,18 @@ function Breakdown({ icon, tone, title, rows, onRowClick }: { icon: React.ReactN
   );
 }
 
-function StatsCharts({ modelRows, keyRows, teamRows }: { modelRows: StatsBreakdownRow[]; keyRows: StatsBreakdownRow[]; teamRows: StatsBreakdownRow[] }) {
+const chartColors = ["#14745f", "#2563eb", "#d97706", "#7c3aed", "#e0526f", "#52605b"];
+
+function StatsCharts({ spendTitle, spendRows, modelRows }: { spendTitle: string; spendRows: StatsBreakdownRow[]; modelRows: StatsBreakdownRow[] }) {
   return (
     <div className="chart-grid">
-      <DonutChart title="Spend distribution" rows={[
-        { name: "Models", spend: modelRows.reduce((total, row) => total + row.spend, 0), color: "#e0526f" },
-        { name: "Keys", spend: keyRows.reduce((total, row) => total + row.spend, 0), color: "#d97706" },
-        { name: "Teams", spend: teamRows.reduce((total, row) => total + row.spend, 0), color: "#7c3aed" }
-      ]} />
+      <DonutChart title={spendTitle} rows={spendRows.slice(0, 6).map((row, index) => ({ ...row, color: chartColors[index % chartColors.length] }))} />
       <BarChart title="Requests by model" rows={modelRows.slice(0, 6)} color="#2563eb" />
     </div>
   );
 }
 
-function DonutChart({ title, rows }: { title: string; rows: Array<{ name: string; spend: number; color: string }> }) {
+function DonutChart({ title, rows }: { title: string; rows: Array<StatsBreakdownRow & { color: string }> }) {
   const total = rows.reduce((sum, row) => sum + row.spend, 0);
   let offset = 0;
   return (

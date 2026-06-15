@@ -477,7 +477,7 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await expect(page.getByRole("heading", { name: "Stats" })).toBeVisible();
-  await expect(page.getByRole("img", { name: "Spend distribution" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Spend by team" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Requests by model" })).toBeVisible();
   await expect(page.getByText("1-10 of 12")).toBeVisible();
   await expect(page.getByText("Page 1 of 2")).toBeVisible();
@@ -488,7 +488,7 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
   await expect(page.getByRole("heading", { name: "Key stats" })).toBeVisible();
   await expect(page.getByText("API key")).toBeVisible();
   await expect(page.locator(".detail-heading code")).toHaveText("key-a");
-  await expect(page.getByRole("img", { name: "Spend distribution" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Key spend by model" })).toBeVisible();
   await expect(page.getByText("Recent key spend logs")).toBeVisible();
   await page.getByRole("button", { name: "Back to stats" }).click();
   await page.getByRole("button", { name: /team-a/ }).click();
@@ -496,6 +496,7 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
   await expect(page.getByRole("heading", { name: "Team stats" })).toBeVisible();
   await expect(page.locator(".detail-heading").getByText("Team", { exact: true })).toBeVisible();
   await expect(page.locator(".detail-heading code")).toHaveText("team-a");
+  await expect(page.getByRole("img", { name: "Team spend by key" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Requests by model" })).toBeVisible();
   await expect(page.getByText("Recent team spend logs")).toBeVisible();
 });
