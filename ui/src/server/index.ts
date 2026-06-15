@@ -99,25 +99,40 @@ app.get("/api/keys", async (request, reply) => {
 app.post("/api/keys", async (request, reply) => {
   const session = await requireSession(request, reply);
   const body = request.body as Record<string, unknown> || {};
+  const promptPolicyIds = stringArrayField(body, "prompt_policy_ids");
   const metadata = await promptPolicies.metadataForKey(null, stringField(body, "team_id"), objectField(body, "metadata"));
-  return litellm.request("/key/generate", session.litellmKey, {
+  const payload: Record<string, unknown> = { ...body, metadata };
+  delete payload.prompt_policy_ids;
+  const result = await litellm.request<Record<string, unknown>>("/key/generate", session.litellmKey, {
     method: "POST",
-    body: JSON.stringify({ ...body, metadata })
+    body: JSON.stringify(payload)
   });
+  if (promptPolicyIds.length) {
+    const createdKey = await findGeneratedLiteLLMKey(session.litellmKey, result, stringField(body, "key_alias"));
+    if (createdKey) await promptPolicies.setKeyPolicyAssignments(keyIdentifier(createdKey), promptPolicyIds, session.litellmKey);
+  }
+  return result;
 });
 
 app.patch("/api/keys/:key", async (request, reply) => {
   const session = await requireSession(request, reply);
   const params = z.object({ key: z.string().min(1) }).parse(request.params);
   const body = request.body as Record<string, unknown> || {};
+  const promptPolicyIds = stringArrayField(body, "prompt_policy_ids");
   const existing = await findLiteLLMKey(session.litellmKey, params.key);
   const teamId = stringField(body, "team_id") ?? (existing ? stringField(existing, "team_id") : null);
   const requestedMetadata = body.metadata === undefined ? objectField(existing, "metadata") : objectField(body, "metadata");
   const metadata = await promptPolicies.metadataForKey(params.key, teamId, requestedMetadata);
-  return litellm.request("/key/update", session.litellmKey, {
+  const payload: Record<string, unknown> = { ...body, key: params.key, metadata };
+  delete payload.prompt_policy_ids;
+  const result = await litellm.request("/key/update", session.litellmKey, {
     method: "POST",
-    body: JSON.stringify({ ...body, key: params.key, metadata })
+    body: JSON.stringify(payload)
   });
+  if (body.prompt_policy_ids !== undefined) {
+    await promptPolicies.setKeyPolicyAssignments(params.key, promptPolicyIds, session.litellmKey);
+  }
+  return result;
 });
 
 app.delete("/api/keys", async (request, reply) => {
@@ -296,6 +311,19 @@ async function findLiteLLMKey(litellmKey: string, key: string): Promise<Record<s
   return null;
 }
 
+async function findGeneratedLiteLLMKey(litellmKey: string, result: Record<string, unknown>, alias: string | null): Promise<Record<string, unknown> | null> {
+  const response = await litellm.request<unknown>("/key/list?page=1&size=100&return_full_object=true", litellmKey);
+  const rows = arrayFrom(response, "keys", "data");
+  for (const row of rows) {
+    const id = keyIdentifier(row);
+    if (id && (id === stringField(result, "key") || id === stringField(result, "token") || id === stringField(result, "key_name"))) return row;
+  }
+  if (alias) {
+    return rows.find((row) => stringField(row, "key_alias") === alias) || null;
+  }
+  return null;
+}
+
 function normalizeModelInfoResponse(value: unknown): unknown {
   if (!value || typeof value !== "object" || !Array.isArray((value as Record<string, unknown>).data)) return value;
   return {
@@ -340,6 +368,11 @@ function objectField(value: Record<string, unknown> | null, key: string): Record
 
 function stringField(value: Record<string, unknown>, key: string): string | null {
   return typeof value[key] === "string" && value[key] ? value[key] : null;
+}
+
+function stringArrayField(value: Record<string, unknown>, key: string): string[] {
+  const field = value[key];
+  return Array.isArray(field) ? field.filter((item): item is string => typeof item === "string" && Boolean(item)) : [];
 }
 
 function stripOpenAIPrefix(model: string): string {

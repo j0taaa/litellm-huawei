@@ -11,14 +11,23 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page).toHaveURL(/\/stats$/);
   await expect(page.getByRole("main").getByText("Models")).toBeVisible();
 
-  await page.getByRole("link", { name: "Keys" }).click();
-  await expect(page.getByRole("heading", { name: "Keys" })).toBeVisible();
-  await expect(page).toHaveURL(/\/keys$/);
   let createPayload: Record<string, any> | undefined;
   let clonePayload: Record<string, any> | undefined;
   let updatePayload: Record<string, any> | undefined;
   let updateUrl = "";
   let deletePayload: Record<string, any> | undefined;
+  let policyCreatePayload: Record<string, any> | undefined;
+  let policyAssignmentsPayload: Record<string, any> | undefined;
+  let policyList = {
+    policies: [{
+      id: "policy-cpf",
+      name: "CPF redaction",
+      description: "Redacts Brazilian CPF numbers",
+      enabled: true,
+      rules: [],
+      assignments: [{ target_type: "key", target_id: "hash-delete-test" }]
+    }] as Array<Record<string, any>>
+  };
   await page.route("**/api/keys**", async (route) => {
     const method = route.request().method();
     if (method === "GET") {
@@ -69,6 +78,30 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     }
     await route.continue();
   });
+  await page.route("**/api/prompt-policies**", async (route) => {
+    const method = route.request().method();
+    if (method === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(policyList) });
+      return;
+    }
+    if (method === "POST") {
+      policyCreatePayload = route.request().postDataJSON();
+      const policy = { id: "policy-safe", ...policyCreatePayload, assignments: [] };
+      policyList = { policies: [policy] };
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(policy) });
+      return;
+    }
+    if (method === "PUT") {
+      policyAssignmentsPayload = route.request().postDataJSON();
+      policyList.policies[0].assignments = policyAssignmentsPayload?.assignments || [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(policyList.policies[0]) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.getByRole("link", { name: "Keys" }).click();
+  await expect(page.getByRole("heading", { name: "Keys" })).toBeVisible();
+  await expect(page).toHaveURL(/\/keys$/);
   await page.getByRole("button", { name: "Create key" }).click();
   await expect(page.getByRole("dialog", { name: "Create key" })).toBeVisible();
   await expect(page.getByPlaceholder("Production app")).toBeVisible();
@@ -112,8 +145,11 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("deepseek-v4-flash").check();
   await expect(page.getByText("1 selected")).toBeVisible();
   await expect(page.getByLabel(/openai\//)).toHaveCount(0);
+  await expect(page.getByLabel("CPF redaction")).toBeVisible();
+  await page.getByLabel("CPF redaction").check();
   await page.getByRole("dialog").getByRole("button", { name: "Create key" }).click();
   await expect(page.getByText("sk-test-schedule")).toBeVisible();
+  const selectedPolicyIds = createPayload?.prompt_policy_ids || [];
   expect(createPayload).toMatchObject({
     key_alias: "Schedule test",
     metadata: {
@@ -125,6 +161,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     },
     models: ["deepseek-v4-flash"]
   });
+  expect(selectedPolicyIds).toHaveLength(1);
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByText("Delete test")).toBeVisible();
   await page.getByTitle("Edit key").first().click();
@@ -135,6 +172,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Max TPM")).toHaveValue("1000");
   await expect(page.getByLabel("Max parallel")).toHaveValue("2");
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
+  await expect(page.getByLabel("CPF redaction")).toBeChecked();
   await page.getByPlaceholder("Production app").fill("Edited key");
   await page.getByLabel("Block key").check();
   await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
@@ -149,7 +187,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     models: ["deepseek-v4-flash"],
     metadata: {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] }
-    }
+    },
+    prompt_policy_ids: selectedPolicyIds
   });
   await page.getByTitle("Clone key").first().click();
   await expect(page.getByRole("dialog", { name: "Clone key" })).toBeVisible();
@@ -157,6 +196,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Budget USD")).toHaveValue("25");
   await expect(page.getByLabel("Max TPS")).toHaveValue("2");
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
+  await expect(page.getByLabel("CPF redaction")).toBeChecked();
   await page.getByRole("dialog").getByRole("button", { name: "Clone key" }).click();
   await expect(page.getByText("sk-test-clone")).toBeVisible();
   expect(clonePayload).toMatchObject({
@@ -169,7 +209,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     models: ["deepseek-v4-flash"],
     metadata: {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] }
-    }
+    },
+    prompt_policy_ids: selectedPolicyIds
   });
   expect(clonePayload).not.toHaveProperty("key");
   await page.getByRole("button", { name: "Done" }).click();
@@ -245,9 +286,6 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByTitle("Delete model").first().click();
   await expect.poll(() => modelDeleteUrl).toContain("/api/models/model-glm-test");
 
-  let policyCreatePayload: Record<string, any> | undefined;
-  let policyAssignmentsPayload: Record<string, any> | undefined;
-  let policyList = { policies: [] as Array<Record<string, any>> };
   await page.route("**/api/teams**", async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({
@@ -255,27 +293,6 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
         contentType: "application/json",
         body: JSON.stringify({ teams: [{ team_id: "team-safe", team_alias: "Safety team" }] })
       });
-      return;
-    }
-    await route.continue();
-  });
-  await page.route("**/api/prompt-policies**", async (route) => {
-    const method = route.request().method();
-    if (method === "GET") {
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(policyList) });
-      return;
-    }
-    if (method === "POST") {
-      policyCreatePayload = route.request().postDataJSON();
-      const policy = { id: "policy-safe", ...policyCreatePayload, assignments: [] };
-      policyList = { policies: [policy] };
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(policy) });
-      return;
-    }
-    if (method === "PUT") {
-      policyAssignmentsPayload = route.request().postDataJSON();
-      policyList.policies[0].assignments = policyAssignmentsPayload?.assignments || [];
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(policyList.policies[0]) });
       return;
     }
     await route.continue();

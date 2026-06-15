@@ -56,6 +56,7 @@ type KeyFormState = {
   durationAmount: number;
   durationUnit: DurationUnit;
   models: string[];
+  policyIds: string[];
 };
 
 const defaultKeyForm: KeyFormState = {
@@ -83,7 +84,8 @@ const defaultKeyForm: KeyFormState = {
   expires: false,
   durationAmount: 30,
   durationUnit: "d",
-  models: []
+  models: [],
+  policyIds: []
 };
 
 type ModelFormState = {
@@ -346,6 +348,7 @@ function KeysPage() {
   const { data, loading, reload } = useResource<{ keys?: ApiKeyListRow[]; data?: ApiKeyListRow[] }>("/api/keys?page=1&size=100");
   const models = useResource<{ data?: ModelInfo[] }>("/api/models");
   const teamsResource = useResource<TeamRow[] | { teams?: TeamRow[]; data?: TeamRow[] }>("/api/teams");
+  const policiesResource = useResource<{ policies: PromptPolicy[] }>("/api/prompt-policies");
   const [createdKey, setCreatedKey] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<ApiKeyListRow | null>(null);
@@ -356,6 +359,7 @@ function KeysPage() {
   const keys = data?.keys || data?.data || [];
   const modelNames = (models.data?.data || []).map((model) => model.model_name);
   const teams = Array.isArray(teamsResource.data) ? teamsResource.data : teamsResource.data?.teams || teamsResource.data?.data || [];
+  const policies = policiesResource.data?.policies || [];
   const scheduleInvalid = form.accessSchedule && form.accessDays.length === 0;
 
   async function submitKey(event: React.FormEvent) {
@@ -385,6 +389,10 @@ function KeysPage() {
     setForm({ ...form, models: nextModels });
   }
 
+  function toggleKeyPolicy(policyId: string) {
+    setForm({ ...form, policyIds: toggleValue(form.policyIds, policyId) });
+  }
+
   function toggleAccessDay(day: number) {
     const nextDays = form.accessDays.includes(day)
       ? form.accessDays.filter((value) => value !== day)
@@ -401,7 +409,8 @@ function KeysPage() {
   }
 
   function openEditModal(row: ApiKeyListRow) {
-    setForm(keyFormFromRow(normalizeKeyRow(row)));
+    const key = keyIdentifier(row);
+    setForm(keyFormFromRow(normalizeKeyRow(row), policies, key));
     setCreatedKey("");
     setEditingKey(row);
     setCloningKey(null);
@@ -409,7 +418,8 @@ function KeysPage() {
   }
 
   function openCloneModal(row: ApiKeyListRow) {
-    const nextForm = keyFormFromRow(normalizeKeyRow(row));
+    const key = keyIdentifier(row);
+    const nextForm = keyFormFromRow(normalizeKeyRow(row), policies, key);
     setForm({
       ...nextForm,
       key_alias: nextForm.key_alias ? `${nextForm.key_alias} copy` : ""
@@ -614,6 +624,24 @@ function KeysPage() {
                     <label className="model-check" key={name}>
                       <input type="checkbox" checked={form.models.includes(name)} onChange={() => toggleKeyModel(name)} />
                       <span>{name}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="model-access">
+                <div className="model-access-header">
+                  <span className="field-label">Prompt policies</span>
+                  <div className="model-actions">
+                    <button type="button" className="text-action" onClick={() => setForm({ ...form, policyIds: policies.map((policy) => policy.id) })}>Select all</button>
+                    <button type="button" className="text-action" onClick={() => setForm({ ...form, policyIds: [] })}>Clear</button>
+                  </div>
+                </div>
+                <p className="field-note">{form.policyIds.length ? `${form.policyIds.length} selected` : "No key-specific prompt policies are assigned."}</p>
+                <div className="model-checks">
+                  {policies.map((policy) => (
+                    <label className="model-check" key={policy.id}>
+                      <input type="checkbox" checked={form.policyIds.includes(policy.id)} onChange={() => toggleKeyPolicy(policy.id)} />
+                      <span>{policy.name}</span>
                     </label>
                   ))}
                 </div>
@@ -1289,11 +1317,12 @@ function keyPayload(form: KeyFormState, mode: "create" | "edit" | "clone"): Reco
     max_parallel_requests: form.max_parallel_requests ? Number(form.max_parallel_requests) : (editing ? null : undefined),
     metadata: Object.keys(metadata).length ? metadata : (editing ? {} : undefined),
     blocked: editing || cloning ? form.blocked : undefined,
-    models: form.models
+    models: form.models,
+    prompt_policy_ids: form.policyIds
   });
 }
 
-function keyFormFromRow(row: ApiKeyRow): KeyFormState {
+function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], key = ""): KeyFormState {
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   const tokenBudget = objectField(metadata, "huawei_token_budget");
   const timeAccess = objectField(metadata, "huawei_time_access");
@@ -1328,7 +1357,10 @@ function keyFormFromRow(row: ApiKeyRow): KeyFormState {
     accessStart,
     accessEnd,
     blocked: Boolean(row.blocked),
-    models: row.models || []
+    models: row.models || [],
+    policyIds: policies
+      .filter((policy) => policy.assignments.some((assignment) => assignment.target_type === "key" && assignment.target_id === key))
+      .map((policy) => policy.id)
   };
 }
 
