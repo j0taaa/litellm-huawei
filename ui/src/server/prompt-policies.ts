@@ -188,6 +188,31 @@ export class PromptPolicyStore {
     return { ok: true };
   }
 
+  async setTeamPolicyAssignments(teamId: string, policyIds: string[], litellmKey: string) {
+    const pool = this.requirePool();
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM prompt_policy_assignments WHERE target_type = 'team' AND target_id = $1", [teamId]);
+      for (const policyId of policyIds) {
+        await client.query(
+          `INSERT INTO prompt_policy_assignments (policy_id, target_type, target_id)
+           SELECT id, 'team', $2 FROM prompt_policies WHERE id = $1
+           ON CONFLICT DO NOTHING`,
+          [policyId, teamId]
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+    await this.syncAllEffectivePolicies(litellmKey);
+    return { ok: true };
+  }
+
   async metadataForKey(keyId: string | null, teamId: string | null, existingMetadata: Record<string, unknown> | null | undefined) {
     const policies = await this.effectivePolicySnapshot(keyId, teamId);
     return mergePolicyMetadata(existingMetadata, policies);

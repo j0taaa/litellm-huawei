@@ -28,10 +28,13 @@ export type TeamRow = {
   team_id: string;
   team_alias?: string | null;
   models?: string[];
+  metadata?: Record<string, unknown> | null;
   spend?: number;
   max_budget?: number | null;
+  budget_duration?: string | null;
   rpm_limit?: number | null;
   tpm_limit?: number | null;
+  max_parallel_requests?: number | null;
   blocked?: boolean;
   members_with_roles?: Array<{ user_id: string; role: string }>;
 };

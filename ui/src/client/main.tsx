@@ -59,6 +59,31 @@ type KeyFormState = {
   policyIds: string[];
 };
 
+type TeamFormState = {
+  team_alias: string;
+  max_budget: string;
+  resetBudget: boolean;
+  budgetResetAmount: number;
+  budgetResetUnit: DurationUnit;
+  max_tps: string;
+  max_tpm: string;
+  max_parallel_requests: string;
+  tokenBudget: boolean;
+  tokenBudgetTokens: string;
+  tokenBudgetReset: boolean;
+  tokenBudgetResetAmount: number;
+  tokenBudgetResetUnit: DurationUnit;
+  accessSchedule: boolean;
+  accessTimezone: string;
+  accessDays: number[];
+  accessHours: boolean;
+  accessStart: string;
+  accessEnd: string;
+  blocked: boolean;
+  models: string[];
+  policyIds: string[];
+};
+
 const defaultKeyForm: KeyFormState = {
   key_alias: "",
   team_id: "",
@@ -84,6 +109,31 @@ const defaultKeyForm: KeyFormState = {
   expires: false,
   durationAmount: 30,
   durationUnit: "d",
+  models: [],
+  policyIds: []
+};
+
+const defaultTeamForm: TeamFormState = {
+  team_alias: "",
+  max_budget: "",
+  resetBudget: false,
+  budgetResetAmount: 30,
+  budgetResetUnit: "d",
+  max_tps: "",
+  max_tpm: "",
+  max_parallel_requests: "",
+  tokenBudget: false,
+  tokenBudgetTokens: "",
+  tokenBudgetReset: false,
+  tokenBudgetResetAmount: 30,
+  tokenBudgetResetUnit: "d",
+  accessSchedule: false,
+  accessTimezone: "America/Sao_Paulo",
+  accessDays: [1, 2, 3, 4, 5],
+  accessHours: false,
+  accessStart: "09:00",
+  accessEnd: "17:00",
+  blocked: false,
   models: [],
   policyIds: []
 };
@@ -1099,24 +1149,32 @@ function ModelsPage() {
 function TeamsPage() {
   const { data, loading, reload } = useResource<TeamRow[] | { teams?: TeamRow[]; data?: TeamRow[] }>("/api/teams");
   const models = useResource<{ data?: ModelInfo[] }>("/api/models");
+  const policiesResource = useResource<{ policies: PromptPolicy[] }>("/api/prompt-policies");
   const teams = Array.isArray(data) ? data : data?.teams || data?.data || [];
   const modelNames = (models.data?.data || []).map((model) => model.model_name);
-  const [form, setForm] = useState({ team_alias: "", max_budget: "", rpm_limit: "", tpm_limit: "", models: "" });
+  const policies = policiesResource.data?.policies || [];
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingTeam, setEditingTeam] = useState<TeamRow | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [togglingTeam, setTogglingTeam] = useState("");
+  const [form, setForm] = useState<TeamFormState>(defaultTeamForm);
+  const scheduleInvalid = form.accessSchedule && form.accessDays.length === 0;
 
-  async function createTeam(event: React.FormEvent) {
+  async function submitTeam(event: React.FormEvent) {
     event.preventDefault();
-    await api("/api/teams", {
-      method: "POST",
-      body: clean({
-        team_alias: form.team_alias,
-        max_budget: form.max_budget ? Number(form.max_budget) : undefined,
-        rpm_limit: form.rpm_limit ? Number(form.rpm_limit) : undefined,
-        tpm_limit: form.tpm_limit ? Number(form.tpm_limit) : undefined,
-        models: form.models ? [form.models] : []
-      })
-    });
-    setForm({ team_alias: "", max_budget: "", rpm_limit: "", tpm_limit: "", models: "" });
-    reload();
+    setSaving(true);
+    try {
+      const payload = teamPayload(form, Boolean(editingTeam));
+      if (editingTeam) {
+        await api(`/api/teams/${encodeURIComponent(editingTeam.team_id)}`, { method: "PATCH", body: payload });
+      } else {
+        await api("/api/teams", { method: "POST", body: payload });
+      }
+      closeTeamModal();
+      reload();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function deleteTeam(teamId: string) {
@@ -1124,23 +1182,161 @@ function TeamsPage() {
     reload();
   }
 
+  async function toggleTeamActive(team: TeamRow) {
+    setTogglingTeam(team.team_id);
+    try {
+      await api(`/api/teams/${encodeURIComponent(team.team_id)}`, { method: "PATCH", body: { blocked: !Boolean(team.blocked) } });
+      reload();
+    } finally {
+      setTogglingTeam("");
+    }
+  }
+
+  function openCreateTeam() {
+    setEditingTeam(null);
+    setForm(defaultTeamForm);
+    setModalOpen(true);
+  }
+
+  function openEditTeam(team: TeamRow) {
+    setEditingTeam(team);
+    setForm(teamFormFromRow(team, policies));
+    setModalOpen(true);
+  }
+
+  function closeTeamModal() {
+    setModalOpen(false);
+    setEditingTeam(null);
+    setForm(defaultTeamForm);
+  }
+
+  function toggleTeamModel(modelName: string) {
+    setForm({ ...form, models: toggleValue(form.models, modelName) });
+  }
+
+  function toggleTeamPolicy(policyId: string) {
+    setForm({ ...form, policyIds: toggleValue(form.policyIds, policyId) });
+  }
+
+  function toggleTeamAccessDay(day: number) {
+    const nextDays = form.accessDays.includes(day)
+      ? form.accessDays.filter((value) => value !== day)
+      : [...form.accessDays, day].sort((left, right) => left - right);
+    setForm({ ...form, accessDays: nextDays });
+  }
+
   return (
     <section>
-      <Header icon={<Users size={22} />} title="Teams" tone="violet" action={<button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button>} />
-      <form className="toolbar" onSubmit={createTeam}>
-        <input placeholder="Team alias" value={form.team_alias} onChange={(e) => setForm({ ...form, team_alias: e.target.value })} />
-        <input placeholder="Budget USD" value={form.max_budget} onChange={(e) => setForm({ ...form, max_budget: e.target.value })} />
-        <input placeholder="RPM" value={form.rpm_limit} onChange={(e) => setForm({ ...form, rpm_limit: e.target.value })} />
-        <input placeholder="TPM" value={form.tpm_limit} onChange={(e) => setForm({ ...form, tpm_limit: e.target.value })} />
-        <select value={form.models} onChange={(e) => setForm({ ...form, models: e.target.value })}>
-          <option value="">All models</option>
-          {modelNames.map((name) => <option key={name} value={name}>{name}</option>)}
-        </select>
-        <button className="primary"><Plus size={16} /> Create</button>
-      </form>
+      <Header icon={<Users size={22} />} title="Teams" tone="violet" action={<div className="header-actions"><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button><button className="primary" onClick={openCreateTeam}><Plus size={16} /> Create team</button></div>} />
+      {modalOpen ? (
+        <Modal title={editingTeam ? "Edit team" : "Create team"} onClose={closeTeamModal}>
+          <form className="modal-form" onSubmit={submitTeam}>
+            <label>Alias<input placeholder="Platform team" value={form.team_alias} onChange={(e) => setForm({ ...form, team_alias: e.target.value })} /></label>
+            {editingTeam ? <label className="toggle-row"><input type="checkbox" checked={form.blocked} onChange={(e) => setForm({ ...form, blocked: e.target.checked })} /> <span>Block team</span></label> : null}
+            <label>Budget USD<input placeholder="Optional" value={form.max_budget} onChange={(e) => setForm({ ...form, max_budget: e.target.value })} /></label>
+            <div className="expiration-field">
+              <label className="toggle-row"><input type="checkbox" checked={form.resetBudget} onChange={(e) => setForm({ ...form, resetBudget: e.target.checked })} /> <span>Reset budget</span></label>
+              {form.resetBudget ? (
+                <div className="duration-controls">
+                  <label>Reset every<input type="number" min="1" step="1" value={form.budgetResetAmount} onChange={(e) => setForm({ ...form, budgetResetAmount: Math.max(1, Number(e.target.value) || 1) })} /></label>
+                  <label>Budget reset unit
+                    <select value={form.budgetResetUnit} onChange={(e) => setForm({ ...form, budgetResetUnit: e.target.value as DurationUnit })}>
+                      <option value="m">Minutes</option>
+                      <option value="h">Hours</option>
+                      <option value="d">Days</option>
+                    </select>
+                  </label>
+                </div>
+              ) : <p className="field-note compact">Budget does not reset.</p>}
+            </div>
+            <fieldset className="config-section">
+              <span className="field-label">Rate limits</span>
+              <div className="config-grid">
+                <label>Max TPS<input type="number" min="0.01" step="0.01" placeholder="Optional" value={form.max_tps} onChange={(e) => setForm({ ...form, max_tps: e.target.value })} /></label>
+                <label>Max TPM<input type="number" min="1" step="1" placeholder="Optional" value={form.max_tpm} onChange={(e) => setForm({ ...form, max_tpm: e.target.value })} /></label>
+                <label>Max parallel<input type="number" min="1" step="1" placeholder="Optional" value={form.max_parallel_requests} onChange={(e) => setForm({ ...form, max_parallel_requests: e.target.value })} /></label>
+              </div>
+            </fieldset>
+            <fieldset className="config-section">
+              <span className="field-label">Token quota</span>
+              <label className="toggle-row"><input type="checkbox" checked={form.tokenBudget} onChange={(e) => setForm({ ...form, tokenBudget: e.target.checked })} /> <span>Set token quota</span></label>
+              {form.tokenBudget ? (
+                <>
+                  <div className="config-grid">
+                    <label>Total token quota<input type="number" min="1" step="1" placeholder="Total tokens" value={form.tokenBudgetTokens} onChange={(e) => setForm({ ...form, tokenBudgetTokens: e.target.value })} required={form.tokenBudget} /></label>
+                    <label className="toggle-row"><input type="checkbox" checked={form.tokenBudgetReset} onChange={(e) => setForm({ ...form, tokenBudgetReset: e.target.checked })} /> <span>Reset token quota</span></label>
+                  </div>
+                  {form.tokenBudgetReset ? (
+                    <div className="duration-controls">
+                      <label>Token reset every<input type="number" min="1" step="1" value={form.tokenBudgetResetAmount} onChange={(e) => setForm({ ...form, tokenBudgetResetAmount: Math.max(1, Number(e.target.value) || 1) })} /></label>
+                      <label>Token reset unit
+                        <select value={form.tokenBudgetResetUnit} onChange={(e) => setForm({ ...form, tokenBudgetResetUnit: e.target.value as DurationUnit })}>
+                          <option value="m">Minutes</option>
+                          <option value="h">Hours</option>
+                          <option value="d">Days</option>
+                        </select>
+                      </label>
+                    </div>
+                  ) : <p className="field-note compact">Token quota does not reset.</p>}
+                </>
+              ) : <p className="field-note compact">No total token quota is enforced.</p>}
+            </fieldset>
+            <fieldset className="config-section">
+              <span className="field-label section-title"><CalendarClock size={16} /> Access schedule</span>
+              <label className="toggle-row"><input type="checkbox" checked={form.accessSchedule} onChange={(e) => setForm({ ...form, accessSchedule: e.target.checked })} /> <span>Restrict access by schedule</span></label>
+              {form.accessSchedule ? (
+                <>
+                  <div className="config-grid schedule-grid">
+                    <label>Access timezone
+                      <select value={form.accessTimezone} onChange={(e) => setForm({ ...form, accessTimezone: e.target.value })}>
+                        {timezones.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}
+                      </select>
+                    </label>
+                    <label className="toggle-row"><input type="checkbox" checked={form.accessHours} onChange={(e) => setForm({ ...form, accessHours: e.target.checked })} /> <span>Limit daily hours</span></label>
+                  </div>
+                  <div>
+                    <span className="field-label">Allowed days</span>
+                    <div className="weekday-checks">
+                      {weekDays.map((day) => (
+                        <label className="weekday-check" key={day.value}>
+                          <input type="checkbox" checked={form.accessDays.includes(day.value)} onChange={() => toggleTeamAccessDay(day.value)} />
+                          <span>{day.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {scheduleInvalid ? <p className="field-note danger-note">Select at least one allowed day.</p> : null}
+                  </div>
+                  {form.accessHours ? <div className="duration-controls"><label>Start time<input type="time" value={form.accessStart} onChange={(e) => setForm({ ...form, accessStart: e.target.value })} required /></label><label>End time<input type="time" value={form.accessEnd} onChange={(e) => setForm({ ...form, accessEnd: e.target.value })} required /></label></div> : <p className="field-note compact">Allowed days are available for the full day.</p>}
+                </>
+              ) : <p className="field-note compact">This team can be used at any time.</p>}
+            </fieldset>
+            <fieldset className="model-access">
+              <div className="model-access-header">
+                <span className="field-label">Model access</span>
+                <div className="model-actions"><button type="button" className="text-action" onClick={() => setForm({ ...form, models: modelNames })}>Select all</button><button type="button" className="text-action" onClick={() => setForm({ ...form, models: [] })}>Clear</button></div>
+              </div>
+              <p className="field-note">{form.models.length ? `${form.models.length} selected` : "No models selected means this team can use all models."}</p>
+              <div className="model-checks">
+                {modelNames.map((name) => <label className="model-check" key={name}><input type="checkbox" checked={form.models.includes(name)} onChange={() => toggleTeamModel(name)} /><span>{name}</span></label>)}
+              </div>
+            </fieldset>
+            <fieldset className="model-access">
+              <div className="model-access-header">
+                <span className="field-label">Prompt policies</span>
+                <div className="model-actions"><button type="button" className="text-action" onClick={() => setForm({ ...form, policyIds: policies.map((policy) => policy.id) })}>Select all</button><button type="button" className="text-action" onClick={() => setForm({ ...form, policyIds: [] })}>Clear</button></div>
+              </div>
+              <p className="field-note">{form.policyIds.length ? `${form.policyIds.length} selected` : "No team prompt policies are assigned."}</p>
+              <div className="model-checks">
+                {policies.map((policy) => <label className="model-check" key={policy.id}><input type="checkbox" checked={form.policyIds.includes(policy.id)} onChange={() => toggleTeamPolicy(policy.id)} /><span>{policy.name}</span></label>)}
+              </div>
+            </fieldset>
+            <div className="modal-actions"><button type="button" className="secondary" onClick={closeTeamModal}>Cancel</button><button className="primary" disabled={saving || scheduleInvalid}>{saving ? "Saving" : editingTeam ? "Save changes" : "Create team"}</button></div>
+          </form>
+        </Modal>
+      ) : null}
       {loading ? <EmptyState text="Loading teams" /> : (
         <table>
-          <thead><tr><th>Alias</th><th>ID</th><th>Models</th><th>Spend</th><th>Budget</th><th>RPM</th><th>TPM</th><th></th></tr></thead>
+          <thead><tr><th>Alias</th><th>ID</th><th>Models</th><th>Spend</th><th>Budget</th><th>RPM</th><th>TPM</th><th>Status</th><th></th></tr></thead>
           <tbody>{teams.map((team) => (
             <tr key={team.team_id}>
               <td>{team.team_alias || "-"}</td>
@@ -1150,7 +1346,14 @@ function TeamsPage() {
               <td>{team.max_budget ? currency(team.max_budget) : "-"}</td>
               <td>{team.rpm_limit || "-"}</td>
               <td>{team.tpm_limit || "-"}</td>
-              <td><button className="icon danger" onClick={() => deleteTeam(team.team_id)} title="Delete team"><Trash2 size={16} /></button></td>
+              <td><StatusBadge blocked={Boolean(team.blocked)} /></td>
+              <td>
+                <div className="row-actions">
+                  <button className="icon" onClick={() => openEditTeam(team)} title="Edit team"><Pencil size={16} /></button>
+                  <button className="icon" onClick={() => toggleTeamActive(team)} title={team.blocked ? "Activate team" : "Deactivate team"} aria-label={team.blocked ? "Activate team" : "Deactivate team"} disabled={togglingTeam === team.team_id}><Power size={16} /></button>
+                  <button className="icon danger" onClick={() => deleteTeam(team.team_id)} title="Delete team"><Trash2 size={16} /></button>
+                </div>
+              </td>
             </tr>
           ))}</tbody>
         </table>
@@ -1300,10 +1503,8 @@ function chatResponseText(result: Record<string, unknown>): string {
   return JSON.stringify(result, null, 2);
 }
 
-function keyPayload(form: KeyFormState, mode: "create" | "edit" | "clone"): Record<string, unknown> {
-  const editing = mode === "edit";
-  const cloning = mode === "clone";
-  const metadata = clean({
+function sharedLimitMetadata(form: KeyFormState | TeamFormState): Record<string, unknown> {
+  return clean({
     huawei_token_budget: form.tokenBudget ? clean({
       max_tokens: Number(form.tokenBudgetTokens),
       reset_duration: form.tokenBudgetReset ? `${form.tokenBudgetResetAmount}${form.tokenBudgetResetUnit}` : undefined,
@@ -1320,6 +1521,12 @@ function keyPayload(form: KeyFormState, mode: "create" | "edit" | "clone"): Reco
       ]
     }) : undefined
   });
+}
+
+function keyPayload(form: KeyFormState, mode: "create" | "edit" | "clone"): Record<string, unknown> {
+  const editing = mode === "edit";
+  const cloning = mode === "clone";
+  const metadata = sharedLimitMetadata(form);
   return clean({
     key_alias: form.key_alias || (editing ? null : undefined),
     team_id: form.team_id || (editing ? null : undefined),
@@ -1334,6 +1541,61 @@ function keyPayload(form: KeyFormState, mode: "create" | "edit" | "clone"): Reco
     models: form.models,
     prompt_policy_ids: form.policyIds
   });
+}
+
+function teamPayload(form: TeamFormState, editing: boolean): Record<string, unknown> {
+  const metadata = sharedLimitMetadata(form);
+  return clean({
+    team_alias: form.team_alias || (editing ? null : undefined),
+    max_budget: form.max_budget ? Number(form.max_budget) : (editing ? null : undefined),
+    budget_duration: form.resetBudget ? `${form.budgetResetAmount}${form.budgetResetUnit}` : (editing ? null : undefined),
+    rpm_limit: form.max_tps ? Math.ceil(Number(form.max_tps) * 60) : (editing ? null : undefined),
+    tpm_limit: form.max_tpm ? Number(form.max_tpm) : (editing ? null : undefined),
+    max_parallel_requests: form.max_parallel_requests ? Number(form.max_parallel_requests) : (editing ? null : undefined),
+    metadata: Object.keys(metadata).length ? metadata : (editing ? {} : undefined),
+    blocked: editing ? form.blocked : undefined,
+    models: form.models,
+    prompt_policy_ids: form.policyIds
+  });
+}
+
+function teamFormFromRow(row: TeamRow, policies: PromptPolicy[] = []): TeamFormState {
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const tokenBudget = objectField(metadata, "huawei_token_budget");
+  const timeAccess = objectField(metadata, "huawei_time_access");
+  const firstRule = Array.isArray(timeAccess.rules) && timeAccess.rules[0] && typeof timeAccess.rules[0] === "object"
+    ? timeAccess.rules[0] as Record<string, unknown>
+    : {};
+  const budgetDuration = parseDurationValue(row.budget_duration);
+  const tokenReset = parseDurationValue(stringField(tokenBudget, "reset_duration"));
+  const accessDays = Array.isArray(firstRule.days) ? firstRule.days.filter((day): day is number => typeof day === "number") : defaultTeamForm.accessDays;
+  return {
+    ...defaultTeamForm,
+    team_alias: row.team_alias || "",
+    max_budget: row.max_budget == null ? "" : String(row.max_budget),
+    resetBudget: Boolean(row.budget_duration),
+    budgetResetAmount: budgetDuration.amount,
+    budgetResetUnit: budgetDuration.unit,
+    max_tps: row.rpm_limit ? String(row.rpm_limit / 60) : "",
+    max_tpm: row.tpm_limit == null ? "" : String(row.tpm_limit),
+    max_parallel_requests: row.max_parallel_requests == null ? "" : String(row.max_parallel_requests),
+    tokenBudget: tokenBudget.max_tokens != null,
+    tokenBudgetTokens: tokenBudget.max_tokens == null ? "" : String(tokenBudget.max_tokens),
+    tokenBudgetReset: Boolean(tokenBudget.reset_duration),
+    tokenBudgetResetAmount: tokenReset.amount,
+    tokenBudgetResetUnit: tokenReset.unit,
+    accessSchedule: Object.keys(timeAccess).length > 0,
+    accessTimezone: stringField(timeAccess, "timezone") || defaultTeamForm.accessTimezone,
+    accessDays: accessDays.length ? accessDays : defaultTeamForm.accessDays,
+    accessHours: typeof firstRule.start === "string" && typeof firstRule.end === "string",
+    accessStart: typeof firstRule.start === "string" ? firstRule.start : defaultTeamForm.accessStart,
+    accessEnd: typeof firstRule.end === "string" ? firstRule.end : defaultTeamForm.accessEnd,
+    blocked: Boolean(row.blocked),
+    models: row.models || [],
+    policyIds: policies
+      .filter((policy) => policy.assignments.some((assignment) => assignment.target_type === "team" && assignment.target_id === row.team_id))
+      .map((policy) => policy.id)
+  };
 }
 
 function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], key = ""): KeyFormState {

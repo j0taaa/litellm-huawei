@@ -23,10 +23,10 @@ curl -H "Authorization: Bearer $LITELLM_MASTER_KEY" http://localhost:4000/v1/mod
 - `db` runs Postgres for LiteLLM keys, teams, budgets, usage, models, and admin state.
 - `litellm` starts from a small custom image layered on `ghcr.io/berriai/litellm-database:main-latest`, adds `asyncpg` for the quota callback, and runs with `STORE_MODEL_IN_DB=True`.
 - `model-seed` waits for LiteLLM health, deletes existing DB-backed Huawei MaaS models, and recreates them in LiteLLM’s DB from the latest catalog seed.
-- `maas-ui` provides a simpler browser UI for LiteLLM login, key management, team management, and usage stats.
+- `maas-ui` provides a simpler browser UI for LiteLLM login, key management, team management, model management, prompt policies, testing, and usage stats.
 - Each Huawei model routes to the MaaS OpenAI-compatible endpoint with `model: <huawei-model-id>` and `custom_llm_provider: openai`.
 - Static LiteLLM pricing is set from the first price range so standard LiteLLM metadata works.
-- `custom_callbacks.py` reads the saved catalog, logs exact Huawei MaaS cost, and enforces optional per-key Huawei token quotas and access schedules stored in key metadata.
+- `custom_callbacks.py` reads the saved catalog, logs exact Huawei MaaS cost, and enforces optional Huawei token quotas and access schedules stored on keys and teams.
 
 ## Configuration
 

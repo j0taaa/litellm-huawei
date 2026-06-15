@@ -33,18 +33,22 @@ class HuaweiMaaSCostLogger(CustomLogger):
 
     async def async_pre_call_hook(self, user_api_key_dict, cache, data: dict, call_type: str):
         auth_metadata = _auth_metadata(user_api_key_dict)
+        team_id = _team_identifier(user_api_key_dict)
+        team_metadata = await self._team_metadata(team_id)
         try:
-            time_access = time_access_from_metadata(auth_metadata)
+            team_time_access = time_access_from_metadata(team_metadata)
+            key_time_access = time_access_from_metadata(auth_metadata)
         except ValueError as exc:
             raise HTTPException(
                 status_code=403,
                 detail={"error": "time_access_invalid_config", "message": str(exc)},
             ) from exc
-        if time_access is not None and not is_time_access_allowed(time_access):
-            raise HTTPException(
-                status_code=403,
-                detail={"error": "time_access_denied", "timezone": time_access.timezone},
-            )
+        for source, time_access in (("team", team_time_access), ("key", key_time_access)):
+            if time_access is not None and not is_time_access_allowed(time_access):
+                raise HTTPException(
+                    status_code=403,
+                    detail={"error": "time_access_denied", "source": source, "timezone": time_access.timezone},
+                )
 
         try:
             policy_result = apply_prompt_policies(data, auth_metadata)
@@ -60,13 +64,16 @@ class HuaweiMaaSCostLogger(CustomLogger):
             ) from exc
         data = policy_result.data
 
-        budget = token_budget_from_metadata(auth_metadata)
-        if budget is None:
+        team_budget = token_budget_from_metadata(team_metadata)
+        key_budget = token_budget_from_metadata(auth_metadata)
+        if team_budget is None and key_budget is None:
             return data
 
         key_id = _key_identifier(user_api_key_dict)
-        if not key_id:
+        if key_budget is not None and not key_id:
             raise HTTPException(status_code=429, detail={"error": "token_budget_key_missing"})
+        if team_budget is not None and not team_id:
+            raise HTTPException(status_code=429, detail={"error": "token_budget_team_missing"})
 
         model_id = _request_model_id(data)
         model_max_output_tokens = self._model_max_output_tokens(model_id)
@@ -75,30 +82,47 @@ class HuaweiMaaSCostLogger(CustomLogger):
             default_completion_reserve=self.default_completion_reserve,
             model_max_output_tokens=model_max_output_tokens,
         )
-        reservation_id = str(uuid.uuid4())
-        await self._reserve_tokens(
-            key_id=key_id,
-            reservation_id=reservation_id,
-            estimated_tokens=estimated_tokens,
-            max_tokens=budget.max_tokens,
-            reset_duration=budget.reset_duration,
-        )
+        reservations: list[dict[str, Any]] = []
+        try:
+            for source, budget_key, budget in (
+                ("team", f"team:{team_id}" if team_budget is not None else None, team_budget),
+                ("key", key_id, key_budget),
+            ):
+                if budget is None or not budget_key:
+                    continue
+                reservation = {
+                    "reservation_id": str(uuid.uuid4()),
+                    "key_id": budget_key,
+                    "source": source,
+                    "estimated_tokens": estimated_tokens,
+                }
+                await self._reserve_tokens(
+                    key_id=budget_key,
+                    reservation_id=reservation["reservation_id"],
+                    estimated_tokens=estimated_tokens,
+                    max_tokens=budget.max_tokens,
+                    reset_duration=budget.reset_duration,
+                )
+                reservations.append(reservation)
+        except HTTPException:
+            for reservation in reservations:
+                await self._release_reservation(reservation)
+            raise
 
         metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
-        metadata["huawei_token_budget_reservation"] = {
-            "reservation_id": reservation_id,
-            "key_id": key_id,
-            "estimated_tokens": estimated_tokens,
-        }
+        metadata["huawei_token_budget_reservations"] = reservations
+        if len(reservations) == 1:
+            metadata["huawei_token_budget_reservation"] = reservations[0]
         data["metadata"] = metadata
         return data
 
     async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
         usage = _usage(response_obj)
-        reservation = _reservation_from_kwargs(kwargs)
-        if reservation:
+        reservations = _reservations_from_kwargs(kwargs)
+        if reservations:
             actual_tokens = _actual_total_tokens(usage) if usage else 0
-            await self._reconcile_reservation(reservation, actual_tokens=max(1, actual_tokens))
+            for reservation in reservations:
+                await self._reconcile_reservation(reservation, actual_tokens=max(1, actual_tokens))
 
         if not usage:
             return
@@ -134,8 +158,7 @@ class HuaweiMaaSCostLogger(CustomLogger):
         )
 
     async def async_log_failure_event(self, kwargs, response_obj, start_time, end_time):
-        reservation = _reservation_from_kwargs(kwargs)
-        if reservation:
+        for reservation in _reservations_from_kwargs(kwargs):
             await self._release_reservation(reservation)
 
     def _load_catalog(self) -> dict[str, Any]:
@@ -306,6 +329,17 @@ class HuaweiMaaSCostLogger(CustomLogger):
                 stale_tokens,
             )
 
+    async def _team_metadata(self, team_id: str | None) -> dict[str, Any] | None:
+        if not team_id:
+            return None
+        pool = await self._db_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow('SELECT metadata FROM "LiteLLM_TeamTable" WHERE team_id = $1', team_id)
+        if not row:
+            return None
+        metadata = row["metadata"]
+        return metadata if isinstance(metadata, dict) else None
+
     async def _db_pool(self):
         if self._pool is None:
             import asyncpg
@@ -409,6 +443,11 @@ def _key_identifier(user_api_key_dict: Any) -> str | None:
     return None
 
 
+def _team_identifier(user_api_key_dict: Any) -> str | None:
+    value = _auth_value(user_api_key_dict, "team_id")
+    return value if isinstance(value, str) and value else None
+
+
 def _auth_value(user_api_key_dict: Any, field: str) -> Any:
     if isinstance(user_api_key_dict, dict):
         return user_api_key_dict.get(field)
@@ -419,11 +458,19 @@ def _auth_value(user_api_key_dict: Any, field: str) -> Any:
     return None
 
 
-def _reservation_from_kwargs(kwargs: dict[str, Any]) -> dict[str, Any] | None:
+def _reservations_from_kwargs(kwargs: dict[str, Any]) -> list[dict[str, Any]]:
     metadata = kwargs.get("litellm_params", {}).get("metadata", {})
     if not isinstance(metadata, dict):
-        return None
-    reservation = metadata.get("huawei_token_budget_reservation")
+        return []
+    reservations = metadata.get("huawei_token_budget_reservations")
+    if isinstance(reservations, list):
+        parsed = [_reservation_from_value(item) for item in reservations]
+        return [reservation for reservation in parsed if reservation is not None]
+    reservation = _reservation_from_value(metadata.get("huawei_token_budget_reservation"))
+    return [reservation] if reservation is not None else []
+
+
+def _reservation_from_value(reservation: Any) -> dict[str, Any] | None:
     if not isinstance(reservation, dict):
         return None
     reservation_id = reservation.get("reservation_id")
@@ -436,6 +483,7 @@ def _reservation_from_kwargs(kwargs: dict[str, Any]) -> dict[str, Any] | None:
     return {
         "reservation_id": reservation_id,
         "key_id": key_id,
+        "source": reservation.get("source") if isinstance(reservation.get("source"), str) else "key",
         "estimated_tokens": estimated_tokens,
     }
 

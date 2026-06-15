@@ -224,14 +224,53 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByRole("row", { name: /Delete test/ }).getByTitle("Delete key").click();
   expect(deletePayload).toEqual({ keys: ["hash-delete-test"] });
 
-  await page.getByRole("link", { name: "Teams" }).click();
-  await expect(page.getByRole("heading", { name: "Teams" })).toBeVisible();
-  await expect(page).toHaveURL(/\/teams$/);
-  await expect(page.getByPlaceholder("Team alias")).toBeVisible();
-
+  let teamCreatePayload: Record<string, any> | undefined;
+  let teamUpdatePayload: Record<string, any> | undefined;
+  let teamTogglePayload: Record<string, any> | undefined;
   let modelCreatePayload: Record<string, any> | undefined;
   let modelUpdatePayload: Record<string, any> | undefined;
   let modelDeleteUrl = "";
+  await page.route("**/api/teams**", async (route) => {
+    const method = route.request().method();
+    if (method === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          teams: [{
+            team_id: "team-safe",
+            team_alias: "Safety team",
+            spend: 0,
+            max_budget: 50,
+            budget_duration: "7d",
+            rpm_limit: 180,
+            tpm_limit: 2000,
+            max_parallel_requests: 4,
+            models: ["glm-test"],
+            metadata: {
+              huawei_token_budget: { max_tokens: 25000, reset_duration: "1d", counts: "total_tokens" },
+              huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2, 3], start: "08:00", end: "18:00" }] }
+            },
+            blocked: false
+          }]
+        })
+      });
+      return;
+    }
+    if (method === "POST") {
+      teamCreatePayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ team_id: "team-new", team_alias: teamCreatePayload?.team_alias }) });
+      return;
+    }
+    if (method === "PATCH") {
+      const payload = route.request().postDataJSON();
+      if (Object.keys(payload || {}).length === 1 && payload?.blocked === true) teamTogglePayload = payload;
+      else teamUpdatePayload = payload;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    await route.continue();
+  });
   await page.route("**/api/models**", async (route) => {
     const method = route.request().method();
     if (method === "GET") {
@@ -265,6 +304,64 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     }
     await route.continue();
   });
+  await page.getByRole("link", { name: "Teams" }).click();
+  await expect(page.getByRole("heading", { name: "Teams" })).toBeVisible();
+  await expect(page).toHaveURL(/\/teams$/);
+  await page.getByRole("button", { name: "Create team" }).click();
+  await expect(page.getByRole("dialog", { name: "Create team" })).toBeVisible();
+  await page.getByPlaceholder("Platform team").fill("Team modal");
+  await page.getByLabel("Reset budget").check();
+  await page.getByLabel("Max TPS").fill("3");
+  await page.getByLabel("Max TPM").fill("1500");
+  await page.getByLabel("Max parallel").fill("3");
+  await page.getByLabel("Set token quota").check();
+  await page.getByLabel("Total token quota").fill("30000");
+  await page.getByLabel("Reset token quota").check();
+  await page.getByLabel("Restrict access by schedule").check();
+  await expect(page.getByLabel("Access timezone")).toHaveValue("America/Sao_Paulo");
+  await page.getByLabel("Limit daily hours").check();
+  await page.getByLabel("glm-test").check();
+  await page.getByLabel("CPF redaction").check();
+  await page.getByRole("dialog").getByRole("button", { name: "Create team" }).click();
+  expect(teamCreatePayload).toMatchObject({
+    team_alias: "Team modal",
+    budget_duration: "30d",
+    rpm_limit: 180,
+    tpm_limit: 1500,
+    max_parallel_requests: 3,
+    metadata: {
+      huawei_token_budget: { max_tokens: 30000, reset_duration: "30d", counts: "total_tokens" },
+      huawei_time_access: { timezone: "America/Sao_Paulo", rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }] }
+    },
+    models: ["glm-test"],
+    prompt_policy_ids: ["policy-cpf"]
+  });
+  await page.getByRole("row", { name: /Safety team/ }).getByRole("button", { name: "Deactivate team" }).click();
+  await expect.poll(() => teamTogglePayload).toEqual({ blocked: true });
+  await page.getByTitle("Edit team").click();
+  await expect(page.getByRole("dialog", { name: "Edit team" })).toBeVisible();
+  await expect(page.getByPlaceholder("Platform team")).toHaveValue("Safety team");
+  await expect(page.getByLabel("Budget USD")).toHaveValue("50");
+  await expect(page.getByLabel("Max TPS")).toHaveValue("3");
+  await expect(page.getByLabel("Max TPM")).toHaveValue("2000");
+  await expect(page.getByLabel("Max parallel")).toHaveValue("4");
+  await expect(page.getByLabel("Total token quota")).toHaveValue("25000");
+  await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
+  await expect(page.getByLabel("CPF redaction")).not.toBeChecked();
+  await page.getByLabel("CPF redaction").check();
+  await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
+  expect(teamUpdatePayload).toMatchObject({
+    team_alias: "Safety team",
+    max_budget: 50,
+    budget_duration: "7d",
+    rpm_limit: 180,
+    tpm_limit: 2000,
+    max_parallel_requests: 4,
+    blocked: false,
+    models: ["glm-test"],
+    prompt_policy_ids: ["policy-cpf"]
+  });
+
   await page.getByRole("link", { name: "Models" }).click();
   await expect(page.getByRole("heading", { name: "Models" })).toBeVisible();
   await expect(page).toHaveURL(/\/models$/);
@@ -292,17 +389,6 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByTitle("Delete model").first().click();
   await expect.poll(() => modelDeleteUrl).toContain("/api/models/model-glm-test");
 
-  await page.route("**/api/teams**", async (route) => {
-    if (route.request().method() === "GET") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ teams: [{ team_id: "team-safe", team_alias: "Safety team" }] })
-      });
-      return;
-    }
-    await route.continue();
-  });
   await page.getByRole("link", { name: "Policies" }).click();
   await expect(page.getByRole("heading", { name: "Policies" })).toBeVisible();
   await expect(page).toHaveURL(/\/policies$/);

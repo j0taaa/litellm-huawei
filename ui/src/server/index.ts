@@ -152,16 +152,32 @@ app.get("/api/teams", async (request, reply) => {
 
 app.post("/api/teams", async (request, reply) => {
   const session = await requireSession(request, reply);
-  return litellm.request("/team/new", session.litellmKey, { method: "POST", body: JSON.stringify(request.body || {}) });
+  const body = request.body as Record<string, unknown> || {};
+  const promptPolicyIds = stringArrayField(body, "prompt_policy_ids");
+  const payload: Record<string, unknown> = { ...body };
+  delete payload.prompt_policy_ids;
+  const result = await litellm.request<Record<string, unknown>>("/team/new", session.litellmKey, { method: "POST", body: JSON.stringify(payload) });
+  if (promptPolicyIds.length) {
+    const teamId = stringField(result, "team_id") || await findGeneratedLiteLLMTeam(session.litellmKey, stringField(body, "team_alias"));
+    if (teamId) await promptPolicies.setTeamPolicyAssignments(teamId, promptPolicyIds, session.litellmKey);
+  }
+  return result;
 });
 
 app.patch("/api/teams/:teamId", async (request, reply) => {
   const session = await requireSession(request, reply);
   const params = z.object({ teamId: z.string() }).parse(request.params);
+  const body = request.body as Record<string, unknown> || {};
+  const promptPolicyIds = stringArrayField(body, "prompt_policy_ids");
+  const payload: Record<string, unknown> = { ...body, team_id: params.teamId };
+  delete payload.prompt_policy_ids;
   const result = await litellm.request("/team/update", session.litellmKey, {
     method: "POST",
-    body: JSON.stringify({ ...(request.body as Record<string, unknown> || {}), team_id: params.teamId })
+    body: JSON.stringify(payload)
   });
+  if (body.prompt_policy_ids !== undefined) {
+    await promptPolicies.setTeamPolicyAssignments(params.teamId, promptPolicyIds, session.litellmKey);
+  }
   await promptPolicies.syncAllEffectivePolicies(session.litellmKey);
   return result;
 });
@@ -322,6 +338,14 @@ async function findGeneratedLiteLLMKey(litellmKey: string, result: Record<string
     return rows.find((row) => stringField(row, "key_alias") === alias) || null;
   }
   return null;
+}
+
+async function findGeneratedLiteLLMTeam(litellmKey: string, alias: string | null): Promise<string | null> {
+  if (!alias) return null;
+  const response = await litellm.request<unknown>("/team/list", litellmKey);
+  return arrayFrom(response, "teams", "data")
+    .map((row) => stringField(row, "team_alias") === alias ? stringField(row, "team_id") : null)
+    .find((id): id is string => Boolean(id)) || null;
 }
 
 function normalizeModelInfoResponse(value: unknown): unknown {
