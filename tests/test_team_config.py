@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 import types
 
@@ -25,6 +26,7 @@ sys.modules.setdefault("litellm.integrations.custom_logger", custom_logger)
 
 import custom_callbacks
 from custom_callbacks import HuaweiMaaSCostLogger, _reservations_from_kwargs
+from tests.fixtures import CATALOG
 
 
 def run(coro):
@@ -41,6 +43,24 @@ def logger_with_team(monkeypatch, team_metadata):
     monkeypatch.setattr(logger, "_team_metadata", team_metadata_lookup)
     monkeypatch.setattr(logger, "_model_max_output_tokens", lambda model_id: 64)
     return logger
+
+
+def test_post_call_hook_sets_litellm_response_cost_for_tiered_pricing(monkeypatch, tmp_path):
+    catalog_path = tmp_path / "catalog.json"
+    catalog_path.write_text(json.dumps(CATALOG), encoding="utf-8")
+    monkeypatch.setenv("HUAWEI_MAAS_CATALOG_PATH", str(catalog_path))
+    logger = HuaweiMaaSCostLogger()
+
+    class Response:
+        usage = {"prompt_tokens": 34024, "completion_tokens": 3, "total_tokens": 34027}
+        _hidden_params = {}
+
+    response = Response()
+    returned = run(logger.async_post_call_success_hook({"model": "glm-5.1"}, {}, response))
+
+    assert returned is response
+    assert response._hidden_params["response_cost"] == pytest.approx(0.028079577)
+    assert response._hidden_params["additional_headers"]["llm_provider-x-litellm-response-cost"] == str(0.028079577)
 
 
 def test_team_and_key_token_quotas_create_independent_reservations(monkeypatch):

@@ -131,28 +131,17 @@ class HuaweiMaaSCostLogger(CustomLogger):
         if not model_id:
             return
 
-        catalog = self._load_catalog()
-        model = find_model(catalog, model_id)
-        if not model:
+        cost = self._set_huawei_response_cost(model_id, response_obj, usage)
+        if cost is None:
             return
-
-        prompt_tokens = int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0)
-        completion_tokens = int(usage.get("completion_tokens") or usage.get("output_tokens") or 0)
-        exact_cost = model_cost_usd(model, prompt_tokens, completion_tokens)
-
-        hidden_params = getattr(response_obj, "_hidden_params", None) or {}
-        hidden_params["huawei_maas_response_cost"] = exact_cost
-        hidden_params["huawei_maas_prompt_tokens"] = prompt_tokens
-        hidden_params["huawei_maas_completion_tokens"] = completion_tokens
-        response_obj._hidden_params = hidden_params
 
         print(
             (
                 "huawei_maas_cost "
                 f"model={model_id} "
-                f"prompt_tokens={prompt_tokens} "
-                f"completion_tokens={completion_tokens} "
-                f"exact_cost_usd={exact_cost:.12f}"
+                f"prompt_tokens={cost['prompt_tokens']} "
+                f"completion_tokens={cost['completion_tokens']} "
+                f"exact_cost_usd={cost['exact_cost']:.12f}"
             ),
             flush=True,
         )
@@ -160,6 +149,12 @@ class HuaweiMaaSCostLogger(CustomLogger):
     async def async_log_failure_event(self, kwargs, response_obj, start_time, end_time):
         for reservation in _reservations_from_kwargs(kwargs):
             await self._release_reservation(reservation)
+
+    async def async_post_call_success_hook(self, data: dict, user_api_key_dict, response):
+        model_id = _request_model_id(data)
+        if model_id:
+            self._set_huawei_response_cost(model_id, response)
+        return response
 
     def _load_catalog(self) -> dict[str, Any]:
         stat = self.catalog_path.stat()
@@ -178,6 +173,34 @@ class HuaweiMaaSCostLogger(CustomLogger):
         limits = model.get("limits") if isinstance(model, dict) else None
         value = limits.get("maxOutputTokens") if isinstance(limits, dict) else None
         return value if isinstance(value, int) else None
+
+    def _set_huawei_response_cost(self, model_id: str, response_obj, usage: dict[str, Any] | None = None) -> dict[str, Any] | None:
+        usage = usage or _usage(response_obj)
+        if not usage:
+            return None
+
+        model = find_model(self._load_catalog(), model_id)
+        if not model:
+            return None
+
+        prompt_tokens = int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0)
+        completion_tokens = int(usage.get("completion_tokens") or usage.get("output_tokens") or 0)
+        exact_cost = model_cost_usd(model, prompt_tokens, completion_tokens)
+
+        hidden_params = getattr(response_obj, "_hidden_params", None) or {}
+        if not isinstance(hidden_params, dict):
+            hidden_params = hidden_params.model_dump() if hasattr(hidden_params, "model_dump") else {}
+        hidden_params["response_cost"] = exact_cost
+        hidden_params["huawei_maas_response_cost"] = exact_cost
+        hidden_params["huawei_maas_prompt_tokens"] = prompt_tokens
+        hidden_params["huawei_maas_completion_tokens"] = completion_tokens
+        additional_headers = hidden_params.get("additional_headers")
+        if not isinstance(additional_headers, dict):
+            additional_headers = {}
+        additional_headers["llm_provider-x-litellm-response-cost"] = str(exact_cost)
+        hidden_params["additional_headers"] = additional_headers
+        response_obj._hidden_params = hidden_params
+        return {"exact_cost": exact_cost, "prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}
 
     async def _reserve_tokens(
         self,
