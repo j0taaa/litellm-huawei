@@ -13,6 +13,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
 
   let createPayload: Record<string, any> | undefined;
   let clonePayload: Record<string, any> | undefined;
+  let togglePayload: Record<string, any> | undefined;
   let updatePayload: Record<string, any> | undefined;
   let updateUrl = "";
   let deletePayload: Record<string, any> | undefined;
@@ -68,6 +69,9 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     if (method === "PATCH") {
       updateUrl = route.request().url();
       updatePayload = route.request().postDataJSON();
+      if (Object.keys(updatePayload || {}).length === 1 && updatePayload?.blocked === true) {
+        togglePayload = updatePayload;
+      }
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
       return;
     }
@@ -162,8 +166,10 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     models: ["deepseek-v4-flash"]
   });
   expect(selectedPolicyIds).toHaveLength(1);
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Done" }).click();
   await expect(page.getByText("Delete test")).toBeVisible();
+  await page.getByRole("row", { name: /Delete test/ }).getByRole("button", { name: "Deactivate key" }).click();
+  await expect.poll(() => togglePayload).toEqual({ blocked: true });
   await page.getByTitle("Edit key").first().click();
   await expect(page.getByRole("dialog", { name: "Edit key" })).toBeVisible();
   await expect(page.getByPlaceholder("Production app")).toHaveValue("Delete test");

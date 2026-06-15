@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3, LogOut, MessageSquare, Pencil, Plus, RefreshCcw, Regex, Send, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3, LogOut, MessageSquare, Pencil, Plus, Power, RefreshCcw, Regex, Send, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
 import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptPolicyRule, SessionUser, StatsBreakdownRow, StatsSummary, TeamRow } from "../shared/types";
 import "./styles.css";
 
@@ -354,6 +354,7 @@ function KeysPage() {
   const [editingKey, setEditingKey] = useState<ApiKeyListRow | null>(null);
   const [cloningKey, setCloningKey] = useState<ApiKeyListRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [togglingKey, setTogglingKey] = useState("");
   const [deletingKey, setDeletingKey] = useState("");
   const [form, setForm] = useState<KeyFormState>(defaultKeyForm);
   const keys = data?.keys || data?.data || [];
@@ -447,6 +448,18 @@ function KeysPage() {
       reload();
     } finally {
       setDeletingKey("");
+    }
+  }
+
+  async function toggleKeyActive(row: ApiKeyListRow) {
+    const key = keyIdentifier(row);
+    if (!key) return;
+    setTogglingKey(key);
+    try {
+      await api(`/api/keys/${encodeURIComponent(key)}`, { method: "PATCH", body: { blocked: !Boolean(normalizeKeyRow(row).blocked) } });
+      reload();
+    } finally {
+      setTogglingKey("");
     }
   }
 
@@ -670,6 +683,7 @@ function KeysPage() {
                 <div className="row-actions">
                   <button className="icon" onClick={() => openEditModal(rawRow)} title="Edit key" disabled={!key}><Pencil size={16} /></button>
                   <button className="icon" onClick={() => openCloneModal(rawRow)} title="Clone key" disabled={!key}><Copy size={16} /></button>
+                  <button className="icon" onClick={() => toggleKeyActive(rawRow)} title={row.blocked ? "Activate key" : "Deactivate key"} aria-label={row.blocked ? "Activate key" : "Deactivate key"} disabled={!key || togglingKey === key}><Power size={16} /></button>
                   <button className="icon danger" onClick={() => deleteKey(rawRow)} title="Delete key" disabled={!key || deletingKey === key}><Trash2 size={16} /></button>
                 </div>
               </td>
