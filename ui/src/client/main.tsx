@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, BarChart3, CalendarClock, Copy, DollarSign, ExternalLink, KeyRound, Layers3, LogOut, MessageSquare, Pencil, Plus, Power, RefreshCcw, Regex, Send, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Activity, BarChart3, CalendarClock, Copy, DollarSign, Download, ExternalLink, KeyRound, Layers3, LogOut, MessageSquare, Pencil, Plus, Power, RefreshCcw, Regex, Send, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
 import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptPolicyRule, SessionUser, StatsBreakdownRow, StatsSummary, TeamRow } from "../shared/types";
 import "./styles.css";
 
@@ -359,7 +359,12 @@ function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => void }) {
   const { data, loading, reload } = useResource<StatsSummary>("/api/stats");
   return (
     <section>
-      <Header icon={<BarChart3 size={22} />} title="Stats" tone="green" action={<button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button>} />
+      <Header
+        icon={<BarChart3 size={22} />}
+        title="Stats"
+        tone="green"
+        action={<div className="header-actions"><StatsActions exportHref="/api/stats/export.csv" onRefresh={reload} /></div>}
+      />
       {loading || !data ? <EmptyState text="Loading stats" /> : (
         <>
           <div className="metrics">
@@ -384,13 +389,14 @@ function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => void }) {
 
 function KeyStatsPage({ keyId, onBack }: { keyId: string; onBack: () => void }) {
   const { data, loading, reload } = useResource<StatsSummary>(`/api/stats/keys/${encodeURIComponent(keyId)}`);
+  const exportHref = `/api/stats/keys/${encodeURIComponent(keyId)}/export.csv`;
   return (
     <section>
       <Header
         icon={<KeyRound size={22} />}
         title="Key stats"
         tone="amber"
-        action={<div className="header-actions"><button className="secondary" onClick={onBack}>Back to stats</button><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button></div>}
+        action={<div className="header-actions"><button className="secondary" onClick={onBack}>Back to stats</button><StatsActions exportHref={exportHref} onRefresh={reload} /></div>}
       />
       <div className="detail-heading">
         <span className="muted">API key</span>
@@ -420,13 +426,14 @@ function KeyStatsPage({ keyId, onBack }: { keyId: string; onBack: () => void }) 
 
 function TeamStatsPage({ teamId, onBack }: { teamId: string; onBack: () => void }) {
   const { data, loading, reload } = useResource<StatsSummary>(`/api/stats/teams/${encodeURIComponent(teamId)}`);
+  const exportHref = `/api/stats/teams/${encodeURIComponent(teamId)}/export.csv`;
   return (
     <section>
       <Header
         icon={<Users size={22} />}
         title="Team stats"
         tone="violet"
-        action={<div className="header-actions"><button className="secondary" onClick={onBack}>Back to stats</button><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button></div>}
+        action={<div className="header-actions"><button className="secondary" onClick={onBack}>Back to stats</button><StatsActions exportHref={exportHref} onRefresh={reload} /></div>}
       />
       <div className="detail-heading">
         <span className="muted">Team</span>
@@ -1477,6 +1484,15 @@ function TeamsPage() {
 
 function Header({ icon, title, tone = "green", action }: { icon: React.ReactNode; title: string; tone?: Tone; action?: React.ReactNode }) {
   return <div className="header"><div className={`page-title ${tone}`}><span className="page-icon">{icon}</span><h1>{title}</h1></div>{action}</div>;
+}
+
+function StatsActions({ exportHref, onRefresh }: { exportHref: string; onRefresh: () => void }) {
+  return (
+    <>
+      <a className="secondary" href={exportHref} download><Download size={16} /> Download CSV</a>
+      <button className="secondary" onClick={onRefresh}><RefreshCcw size={16} /> Refresh</button>
+    </>
+  );
 }
 
 function Metric({ icon, tone, label, value }: { icon: React.ReactNode; tone: Tone; label: string; value: string }) {

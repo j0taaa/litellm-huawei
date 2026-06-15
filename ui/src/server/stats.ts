@@ -1,5 +1,18 @@
 import type { StatsBreakdownRow, StatsSummary } from "../shared/types.js";
 
+const exportColumns = [
+  "startTime",
+  "model",
+  "api_key",
+  "team_id",
+  "spend",
+  "prompt_tokens",
+  "completion_tokens",
+  "total_tokens",
+  "end_user",
+  "request_id"
+] as const;
+
 export function summarizeStats(input: {
   spendLogs: Array<Record<string, unknown>>;
   keys: Array<Record<string, unknown>>;
@@ -39,6 +52,33 @@ export function summarizeStats(input: {
       api_key: keyDisplayName(statsKey(log), log, keyAliases)
     }))
   };
+}
+
+export function spendLogsToCsv(input: {
+  spendLogs: Array<Record<string, unknown>>;
+  keys: Array<Record<string, unknown>>;
+}): string {
+  const keyAliases = keyAliasLookup(input.keys);
+  const rows = input.spendLogs.map((log) => {
+    const keyId = statsKey(log);
+    return {
+      startTime: valueField(log, "startTime") ?? valueField(log, "start_time") ?? valueField(log, "created_at") ?? "",
+      model: displayModelName(stringField(log, "model") || "unknown"),
+      api_key: keyDisplayName(keyId, log, keyAliases),
+      team_id: stringField(log, "team_id") || "none",
+      spend: numberField(log, "spend") ?? numberField(log, "response_cost") ?? 0,
+      prompt_tokens: valueField(log, "prompt_tokens") ?? valueField(log, "input_tokens") ?? "",
+      completion_tokens: valueField(log, "completion_tokens") ?? valueField(log, "output_tokens") ?? "",
+      total_tokens: valueField(log, "total_tokens") ?? "",
+      end_user: valueField(log, "end_user") ?? valueField(log, "user") ?? "",
+      request_id: valueField(log, "request_id") ?? valueField(log, "id") ?? ""
+    };
+  });
+
+  return [
+    exportColumns.join(","),
+    ...rows.map((row) => exportColumns.map((column) => csvCell(row[column])).join(","))
+  ].join("\r\n") + "\r\n";
 }
 
 export function filterSpendLogsByKey(spendLogs: Array<Record<string, unknown>>, key: string): Array<Record<string, unknown>> {
@@ -91,6 +131,18 @@ function numberField(value: Record<string, unknown>, key: string): number | null
   return typeof value[key] === "number" ? value[key] : null;
 }
 
+function valueField(value: Record<string, unknown>, key: string): string | number | boolean | null {
+  const field = value[key];
+  return typeof field === "string" || typeof field === "number" || typeof field === "boolean" ? field : null;
+}
+
 function displayModelName(model: string): string {
   return model.startsWith("openai/") ? model.slice("openai/".length) : model;
+}
+
+function csvCell(value: string | number | boolean): string {
+  let text = String(value);
+  if (typeof value === "string" && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  if (/[",\r\n]/.test(text)) return `"${text.replace(/"/g, "\"\"")}"`;
+  return text;
 }

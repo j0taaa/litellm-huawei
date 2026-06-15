@@ -9,7 +9,7 @@ import { loadConfig } from "./config.js";
 import { LiteLLMClient } from "./litellm.js";
 import { PromptPolicyStore, assignmentInputSchema, keyIdentifier, policyInputSchema } from "./prompt-policies.js";
 import { signSession, verifyLiteLLMToken, verifySession, type UiSession } from "./session.js";
-import { filterSpendLogsByKey, filterSpendLogsByTeam, summarizeStats } from "./stats.js";
+import { filterSpendLogsByKey, filterSpendLogsByTeam, spendLogsToCsv, summarizeStats } from "./stats.js";
 
 const config = loadConfig();
 const litellm = new LiteLLMClient(config.litellmBaseUrl);
@@ -243,55 +243,57 @@ app.post("/api/test/chat", async (request, reply) => {
 
 app.get("/api/stats", async (request, reply) => {
   const session = await requireSession(request, reply);
-  const query = new URLSearchParams(request.query as Record<string, string>);
-  const [logs, keys, teams, models] = await Promise.all([
-    litellm.request<unknown>(`/spend/logs?${query.toString()}`, session.litellmKey),
-    litellm.request<unknown>("/key/list?page=1&size=100&return_full_object=true", session.litellmKey),
-    litellm.request<unknown>("/team/list", session.litellmKey),
-    litellm.request<unknown>("/model/info", session.litellmKey)
-  ]);
+  const { logs, keys, teams, models } = await fetchStatsInputs(session, request.query);
   return summarizeStats({
-    spendLogs: arrayFrom(logs, "data", "logs", "spend_logs"),
-    keys: arrayFrom(keys, "keys", "data"),
-    teams: arrayFrom(teams, "teams", "data"),
-    models: arrayFrom(normalizeModelInfoResponse(models), "data")
+    spendLogs: logs,
+    keys,
+    teams,
+    models
   });
+});
+
+app.get("/api/stats/export.csv", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const { logs, keys } = await fetchStatsInputs(session, request.query);
+  return sendCsv(reply, "huawei-litellm-stats.csv", spendLogsToCsv({ spendLogs: logs, keys }));
 });
 
 app.get("/api/stats/keys/:key", async (request, reply) => {
   const session = await requireSession(request, reply);
   const params = z.object({ key: z.string().min(1) }).parse(request.params);
-  const query = new URLSearchParams(request.query as Record<string, string>);
-  const [logs, keys, teams, models] = await Promise.all([
-    litellm.request<unknown>(`/spend/logs?${query.toString()}`, session.litellmKey),
-    litellm.request<unknown>("/key/list?page=1&size=100&return_full_object=true", session.litellmKey),
-    litellm.request<unknown>("/team/list", session.litellmKey),
-    litellm.request<unknown>("/model/info", session.litellmKey)
-  ]);
+  const { logs, keys, teams, models } = await fetchStatsInputs(session, request.query);
   return summarizeStats({
-    spendLogs: filterSpendLogsByKey(arrayFrom(logs, "data", "logs", "spend_logs"), params.key),
-    keys: arrayFrom(keys, "keys", "data"),
-    teams: arrayFrom(teams, "teams", "data"),
-    models: arrayFrom(normalizeModelInfoResponse(models), "data")
+    spendLogs: filterSpendLogsByKey(logs, params.key),
+    keys,
+    teams,
+    models
   });
+});
+
+app.get("/api/stats/keys/:key/export.csv", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ key: z.string().min(1) }).parse(request.params);
+  const { logs, keys } = await fetchStatsInputs(session, request.query);
+  return sendCsv(reply, `huawei-litellm-key-${filenamePart(params.key)}-stats.csv`, spendLogsToCsv({ spendLogs: filterSpendLogsByKey(logs, params.key), keys }));
 });
 
 app.get("/api/stats/teams/:teamId", async (request, reply) => {
   const session = await requireSession(request, reply);
   const params = z.object({ teamId: z.string().min(1) }).parse(request.params);
-  const query = new URLSearchParams(request.query as Record<string, string>);
-  const [logs, keys, teams, models] = await Promise.all([
-    litellm.request<unknown>(`/spend/logs?${query.toString()}`, session.litellmKey),
-    litellm.request<unknown>("/key/list?page=1&size=100&return_full_object=true", session.litellmKey),
-    litellm.request<unknown>("/team/list", session.litellmKey),
-    litellm.request<unknown>("/model/info", session.litellmKey)
-  ]);
+  const { logs, keys, teams, models } = await fetchStatsInputs(session, request.query);
   return summarizeStats({
-    spendLogs: filterSpendLogsByTeam(arrayFrom(logs, "data", "logs", "spend_logs"), params.teamId),
-    keys: arrayFrom(keys, "keys", "data"),
-    teams: arrayFrom(teams, "teams", "data"),
-    models: arrayFrom(normalizeModelInfoResponse(models), "data")
+    spendLogs: filterSpendLogsByTeam(logs, params.teamId),
+    keys,
+    teams,
+    models
   });
+});
+
+app.get("/api/stats/teams/:teamId/export.csv", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ teamId: z.string().min(1) }).parse(request.params);
+  const { logs, keys } = await fetchStatsInputs(session, request.query);
+  return sendCsv(reply, `huawei-litellm-team-${filenamePart(params.teamId)}-stats.csv`, spendLogsToCsv({ spendLogs: filterSpendLogsByTeam(logs, params.teamId), keys }));
 });
 
 if (config.nodeEnv === "production") {
@@ -327,6 +329,38 @@ async function requireSession(request: FastifyRequest, reply: FastifyReply): Pro
     reply.code(401);
     throw new Error("not_authenticated");
   }
+}
+
+async function fetchStatsInputs(session: UiSession, rawQuery: unknown): Promise<{
+  logs: Array<Record<string, unknown>>;
+  keys: Array<Record<string, unknown>>;
+  teams: Array<Record<string, unknown>>;
+  models: Array<Record<string, unknown>>;
+}> {
+  const query = new URLSearchParams(rawQuery as Record<string, string>);
+  const [logs, keys, teams, models] = await Promise.all([
+    litellm.request<unknown>(`/spend/logs?${query.toString()}`, session.litellmKey),
+    litellm.request<unknown>("/key/list?page=1&size=100&return_full_object=true", session.litellmKey),
+    litellm.request<unknown>("/team/list", session.litellmKey),
+    litellm.request<unknown>("/model/info", session.litellmKey)
+  ]);
+  return {
+    logs: arrayFrom(logs, "data", "logs", "spend_logs"),
+    keys: arrayFrom(keys, "keys", "data"),
+    teams: arrayFrom(teams, "teams", "data"),
+    models: arrayFrom(normalizeModelInfoResponse(models), "data")
+  };
+}
+
+function sendCsv(reply: FastifyReply, filename: string, csv: string) {
+  return reply
+    .header("Content-Type", "text/csv; charset=utf-8")
+    .header("Content-Disposition", `attachment; filename="${filename}"`)
+    .send(csv);
+}
+
+function filenamePart(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
 }
 
 function publicSession(session: UiSession) {

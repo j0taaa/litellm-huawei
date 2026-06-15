@@ -140,7 +140,7 @@ nav { display: grid; align-content: start; gap: 8px; }
   font-weight: 720;
   box-shadow: 0 8px 20px rgba(20, 116, 95, 0.18);
 }
-.secondary { background: #ffffff; color: #23332e; border: 1px solid #c9d5d0; }
+.secondary { background: #ffffff; color: #23332e; border: 1px solid #c9d5d0; text-decoration: none; }
 .secondary:hover { border-color: #99aaa4; background: #f8fbfa; }
 .danger { color: #b4233a; }
 .icon { width: 34px; padding: 0; background: transparent; }

@@ -509,6 +509,7 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
   await expect(page.getByRole("img", { name: "Spend by model %" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Spend by key" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Requests by model" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv");
   await expect(page.getByText("1-10 of 12")).toBeVisible();
   await expect(page.getByText("Page 1 of 2")).toBeVisible();
   await page.getByRole("button", { name: "Next" }).click();
@@ -520,6 +521,7 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
   await expect(page.getByText("API key")).toBeVisible();
   await expect(page.locator(".detail-heading code")).toHaveText("key-a");
   await expect(page.getByRole("img", { name: "Key spend by model" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/keys/key-a/export.csv");
   await expect(page.getByText("Recent key spend logs")).toBeVisible();
   await page.getByRole("button", { name: "Back to stats" }).click();
   await page.getByRole("button", { name: /team-a/ }).click();
@@ -529,5 +531,6 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
   await expect(page.locator(".detail-heading code")).toHaveText("team-a");
   await expect(page.getByRole("img", { name: "Team spend by key" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Requests by model" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/teams/team-a/export.csv");
   await expect(page.getByText("Recent team spend logs")).toBeVisible();
 });

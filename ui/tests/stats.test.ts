@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterSpendLogsByKey, filterSpendLogsByTeam, summarizeStats } from "../src/server/stats";
+import { filterSpendLogsByKey, filterSpendLogsByTeam, spendLogsToCsv, summarizeStats } from "../src/server/stats";
 
 describe("summarizeStats", () => {
   it("groups spend logs by model, key, and team", () => {
@@ -47,5 +47,42 @@ describe("summarizeStats", () => {
 
     expect(filterSpendLogsByTeam(logs, "team-a")).toEqual([logs[0]]);
     expect(filterSpendLogsByTeam(logs, "none")).toEqual([logs[2]]);
+  });
+
+  it("exports normalized spend logs as safe CSV", () => {
+    const csv = spendLogsToCsv({
+      spendLogs: [
+        {
+          startTime: "2026-06-15T12:00:00Z",
+          model: "openai/glm-5.1",
+          api_key: "key-a",
+          team_id: "team-a",
+          spend: 0.1,
+          prompt_tokens: 12,
+          completion_tokens: 3,
+          total_tokens: 15,
+          end_user: "Alice, Example",
+          request_id: "req-1"
+        },
+        {
+          start_time: "2026-06-15T12:01:00Z",
+          model: "openai/deepseek-v4-flash",
+          api_key: "key-b",
+          response_cost: 0.2,
+          input_tokens: 20,
+          output_tokens: 5,
+          user: "=unsafe",
+          id: "req-2"
+        }
+      ],
+      keys: [
+        { token: "key-a", key_alias: "Production app" },
+        { token: "key-b", key_alias: "Batch \"Jobs\"" }
+      ]
+    });
+
+    expect(csv).toContain("startTime,model,api_key,team_id,spend,prompt_tokens,completion_tokens,total_tokens,end_user,request_id\r\n");
+    expect(csv).toContain("2026-06-15T12:00:00Z,glm-5.1,Production app,team-a,0.1,12,3,15,\"Alice, Example\",req-1\r\n");
+    expect(csv).toContain("2026-06-15T12:01:00Z,deepseek-v4-flash,\"Batch \"\"Jobs\"\"\",none,0.2,20,5,,\'=unsafe,req-2\r\n");
   });
 });
