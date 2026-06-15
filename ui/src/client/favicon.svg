@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Huawei MaaS LiteLLM">
+  <defs>
+    <linearGradient id="bg" x1="8" x2="56" y1="6" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ef4444" />
+      <stop offset="0.48" stop-color="#2563eb" />
+      <stop offset="1" stop-color="#10b981" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#0f172a" />
+  <path
+    d="M17 41.5h29.5a8.5 8.5 0 0 0 .6-17 13.6 13.6 0 0 0-25.4-3.7A10.6 10.6 0 0 0 17 41.5Z"
+    fill="url(#bg)"
+  />
+  <path
+    d="M18.5 38.5h27.8a5.6 5.6 0 0 0 .2-11.2l-2.4-.1-.7-2.3a9.8 9.8 0 0 0-18.5-1.6l-.9 2-2.1.5a7.1 7.1 0 0 0-3.4 12.7Z"
+    fill="#f8fafc"
+    opacity="0.94"
+  />
+  <path d="M21 47h22" stroke="#f8fafc" stroke-width="4" stroke-linecap="round" opacity="0.92" />
+  <path d="M27 31.5 32 25l5 6.5M32 25v12" stroke="#0f172a" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
