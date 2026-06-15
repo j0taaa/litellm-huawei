@@ -10,9 +10,10 @@ Use the published containers when you only want to run the stack:
 curl -fsSL https://raw.githubusercontent.com/j0taaa/litellm-huawei/main/scripts/install-release.sh | sh
 cd huawei-litellm-ui
 
-# edit .env and set HUAWEI_MAAS_API_KEY, LITELLM_MASTER_KEY, LITELLM_SALT_KEY, and POSTGRES_PASSWORD
 docker compose up -d
 ```
+
+The installer asks for the Huawei MaaS API key and creates `.env` for you. It generates secure defaults for the LiteLLM master key, LiteLLM salt key, and Postgres password unless you provide them.
 
 LiteLLM will listen on `http://localhost:4000` by default. Huawei LiteLLM UI listens on `http://localhost:3002`.
 
