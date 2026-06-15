@@ -7,16 +7,19 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { loadConfig } from "./config.js";
 import { LiteLLMClient } from "./litellm.js";
+import { PromptPolicyStore, assignmentInputSchema, keyIdentifier, policyInputSchema } from "./prompt-policies.js";
 import { signSession, verifyLiteLLMToken, verifySession, type UiSession } from "./session.js";
 import { filterSpendLogsByKey, summarizeStats } from "./stats.js";
 
 const config = loadConfig();
 const litellm = new LiteLLMClient(config.litellmBaseUrl);
+const promptPolicies = new PromptPolicyStore(config.databaseUrl, litellm);
 const app = Fastify({ logger: true });
 const sessionCookie = "maas_ui_session";
 
 await app.register(cookie);
 await app.register(formbody);
+await promptPolicies.ready();
 
 app.get("/health", async () => ({ status: "ok" }));
 
@@ -95,18 +98,25 @@ app.get("/api/keys", async (request, reply) => {
 
 app.post("/api/keys", async (request, reply) => {
   const session = await requireSession(request, reply);
+  const body = request.body as Record<string, unknown> || {};
+  const metadata = await promptPolicies.metadataForKey(null, stringField(body, "team_id"), objectField(body, "metadata"));
   return litellm.request("/key/generate", session.litellmKey, {
     method: "POST",
-    body: JSON.stringify(request.body || {})
+    body: JSON.stringify({ ...body, metadata })
   });
 });
 
 app.patch("/api/keys/:key", async (request, reply) => {
   const session = await requireSession(request, reply);
   const params = z.object({ key: z.string().min(1) }).parse(request.params);
+  const body = request.body as Record<string, unknown> || {};
+  const existing = await findLiteLLMKey(session.litellmKey, params.key);
+  const teamId = stringField(body, "team_id") ?? (existing ? stringField(existing, "team_id") : null);
+  const requestedMetadata = body.metadata === undefined ? objectField(existing, "metadata") : objectField(body, "metadata");
+  const metadata = await promptPolicies.metadataForKey(params.key, teamId, requestedMetadata);
   return litellm.request("/key/update", session.litellmKey, {
     method: "POST",
-    body: JSON.stringify({ ...(request.body as Record<string, unknown> || {}), key: params.key })
+    body: JSON.stringify({ ...body, key: params.key, metadata })
   });
 });
 
@@ -133,10 +143,12 @@ app.post("/api/teams", async (request, reply) => {
 app.patch("/api/teams/:teamId", async (request, reply) => {
   const session = await requireSession(request, reply);
   const params = z.object({ teamId: z.string() }).parse(request.params);
-  return litellm.request("/team/update", session.litellmKey, {
+  const result = await litellm.request("/team/update", session.litellmKey, {
     method: "POST",
     body: JSON.stringify({ ...(request.body as Record<string, unknown> || {}), team_id: params.teamId })
   });
+  await promptPolicies.syncAllEffectivePolicies(session.litellmKey);
+  return result;
 });
 
 app.delete("/api/teams/:teamId", async (request, reply) => {
@@ -146,6 +158,35 @@ app.delete("/api/teams/:teamId", async (request, reply) => {
     method: "POST",
     body: JSON.stringify({ team_ids: [params.teamId] })
   });
+});
+
+app.get("/api/prompt-policies", async (request, reply) => {
+  await requireSession(request, reply);
+  return { policies: await promptPolicies.list() };
+});
+
+app.post("/api/prompt-policies", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  return promptPolicies.create(policyInputSchema.parse(request.body || {}), session.litellmKey);
+});
+
+app.patch("/api/prompt-policies/:policyId", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ policyId: z.string().min(1) }).parse(request.params);
+  return promptPolicies.update(params.policyId, policyInputSchema.parse(request.body || {}), session.litellmKey);
+});
+
+app.delete("/api/prompt-policies/:policyId", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ policyId: z.string().min(1) }).parse(request.params);
+  return promptPolicies.delete(params.policyId, session.litellmKey);
+});
+
+app.put("/api/prompt-policies/:policyId/assignments", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ policyId: z.string().min(1) }).parse(request.params);
+  const body = assignmentInputSchema.parse(request.body || {});
+  return promptPolicies.setAssignments(params.policyId, body.assignments, session.litellmKey);
 });
 
 app.get("/api/stats", async (request, reply) => {
@@ -224,6 +265,14 @@ function publicSession(session: UiSession) {
     userEmail: session.userEmail,
     userRole: session.userRole
   };
+}
+
+async function findLiteLLMKey(litellmKey: string, key: string): Promise<Record<string, unknown> | null> {
+  const response = await litellm.request<unknown>("/key/list?page=1&size=100&return_full_object=true", litellmKey);
+  for (const row of arrayFrom(response, "keys", "data")) {
+    if (keyIdentifier(row) === key) return row;
+  }
+  return null;
 }
 
 function normalizeModelInfoResponse(value: unknown): unknown {

@@ -66,6 +66,31 @@ export type ModelInfo = {
   };
 };
 
+export type PromptPolicyRule = {
+  id?: string;
+  name: string;
+  enabled: boolean;
+  pattern: string;
+  flags: Array<"ignore_case" | "multiline" | "dotall">;
+  action: "block" | "redact" | "append";
+  replacement?: string;
+  append_text?: string;
+};
+
+export type PromptPolicyAssignment = {
+  target_type: "key" | "team";
+  target_id: string;
+};
+
+export type PromptPolicy = {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  rules: PromptPolicyRule[];
+  assignments: PromptPolicyAssignment[];
+};
+
 export type StatsSummary = {
   totals: {
     spend: number;

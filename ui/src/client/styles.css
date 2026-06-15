@@ -19,7 +19,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 
 .boot, .empty {
@@ -55,7 +55,7 @@ h1 { margin: 0; font-size: 24px; letter-spacing: 0; }
 h2 { margin: 0 0 12px; font-size: 15px; letter-spacing: 0; }
 
 label { display: grid; gap: 8px; font-weight: 650; font-size: 13px; color: #2f3d38; }
-input:not([type="checkbox"]), select {
+input:not([type="checkbox"]), select, textarea {
   min-height: 38px;
   border: 1px solid #c9d5d0;
   border-radius: 6px;
@@ -64,6 +64,7 @@ input:not([type="checkbox"]), select {
   color: #172026;
   min-width: 0;
 }
+textarea { min-height: 86px; resize: vertical; }
 
 .error { color: #a32727; background: #fff0f0; border: 1px solid #f2c4c4; padding: 10px; border-radius: 6px; }
 
@@ -278,6 +279,22 @@ nav { display: grid; align-content: start; gap: 8px; }
 
 .config-section {
   display: grid;
+  gap: 12px;
+}
+
+.rule-stack { display: grid; gap: 12px; }
+.rule-editor {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #dfe8e4;
+  border-radius: 8px;
+  background: #fbfdfc;
+}
+.rule-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 

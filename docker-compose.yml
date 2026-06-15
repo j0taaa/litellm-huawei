@@ -108,6 +108,7 @@ services:
       UI_PORT: 3001
       LITELLM_BASE_URL: http://litellm:4000
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-huawei-maas-local}
+      UI_DATABASE_URL: postgresql://${POSTGRES_USER:-litellm}:${POSTGRES_PASSWORD:-litellm-password-change-me}@db:5432/${POSTGRES_DB:-litellm}
       UI_SESSION_SECRET: ${UI_SESSION_SECRET:-${LITELLM_SALT_KEY:-sk-huawei-maas-salt-change-me}}
       UI_SECURE_COOKIES: ${UI_SECURE_COOKIES:-false}
     healthcheck:

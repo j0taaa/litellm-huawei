@@ -16,6 +16,7 @@ from litellm.integrations.custom_logger import CustomLogger
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from huawei_litellm.pricing import find_model, model_cost_usd
+from huawei_litellm.prompt_policies import PromptPolicyBlocked, apply_prompt_policies
 from huawei_litellm.time_access import is_time_access_allowed, time_access_from_metadata
 from huawei_litellm.token_budget import estimate_request_tokens, parse_duration, token_budget_from_metadata
 
@@ -44,6 +45,20 @@ class HuaweiMaaSCostLogger(CustomLogger):
                 status_code=403,
                 detail={"error": "time_access_denied", "timezone": time_access.timezone},
             )
+
+        try:
+            policy_result = apply_prompt_policies(data, auth_metadata)
+        except PromptPolicyBlocked as exc:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "prompt_policy_blocked", **exc.match},
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "prompt_policy_invalid_config", "message": str(exc)},
+            ) from exc
+        data = policy_result.data
 
         budget = token_budget_from_metadata(auth_metadata)
         if budget is None:

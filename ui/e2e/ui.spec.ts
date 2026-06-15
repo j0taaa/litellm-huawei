@@ -243,11 +243,68 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
   expect(modelUpdatePayload).toMatchObject({ model_name: "glm-test", model_info: { id: "model-glm-test", huawei_maas: { name: "GLM Edited" } } });
   await page.getByTitle("Delete model").first().click();
-  expect(modelDeleteUrl).toContain("/api/models/model-glm-test");
+  await expect.poll(() => modelDeleteUrl).toContain("/api/models/model-glm-test");
 
-  await page.goBack();
-  await expect(page.getByRole("heading", { name: "Teams" })).toBeVisible();
-  await expect(page).toHaveURL(/\/teams$/);
+  let policyCreatePayload: Record<string, any> | undefined;
+  let policyAssignmentsPayload: Record<string, any> | undefined;
+  let policyList = { policies: [] as Array<Record<string, any>> };
+  await page.route("**/api/teams**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ teams: [{ team_id: "team-safe", team_alias: "Safety team" }] })
+      });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route("**/api/prompt-policies**", async (route) => {
+    const method = route.request().method();
+    if (method === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(policyList) });
+      return;
+    }
+    if (method === "POST") {
+      policyCreatePayload = route.request().postDataJSON();
+      const policy = { id: "policy-safe", ...policyCreatePayload, assignments: [] };
+      policyList = { policies: [policy] };
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(policy) });
+      return;
+    }
+    if (method === "PUT") {
+      policyAssignmentsPayload = route.request().postDataJSON();
+      policyList.policies[0].assignments = policyAssignmentsPayload?.assignments || [];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(policyList.policies[0]) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.getByRole("link", { name: "Policies" }).click();
+  await expect(page.getByRole("heading", { name: "Policies" })).toBeVisible();
+  await expect(page).toHaveURL(/\/policies$/);
+  await page.getByRole("button", { name: "Create policy" }).click();
+  await expect(page.getByRole("dialog", { name: "Create policy" })).toBeVisible();
+  await page.getByLabel("Name", { exact: true }).fill("PII safety");
+  await page.getByLabel("Description").fill("Redacts emails");
+  await page.getByLabel("Rule name").fill("Email redaction");
+  await page.getByLabel("Regex pattern").fill("[\\\\w.-]+@[\\\\w.-]+");
+  await page.getByLabel("Replacement").fill("[EMAIL]");
+  await page.getByLabel("Safety team").check();
+  await page.getByLabel("Delete test").check();
+  await page.getByRole("dialog").getByRole("button", { name: "Create policy" }).click();
+  expect(policyCreatePayload).toMatchObject({
+    name: "PII safety",
+    enabled: true,
+    rules: [{ name: "Email redaction", action: "redact", replacement: "[EMAIL]" }]
+  });
+  await expect.poll(() => policyAssignmentsPayload).toEqual({
+    assignments: [
+      { target_type: "team", target_id: "team-safe" },
+      { target_type: "key", target_id: "hash-delete-test" }
+    ]
+  });
+  await expect(page.getByRole("cell", { name: "PII safety" })).toBeVisible();
 });
 
 test("direct route keeps destination after login", async ({ page }) => {
