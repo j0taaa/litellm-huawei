@@ -38,9 +38,18 @@ export type TeamRow = {
 
 export type ModelInfo = {
   model_name: string;
+  litellm_params?: {
+    model?: string;
+    custom_llm_provider?: string;
+    api_base?: string;
+    api_key?: string;
+  };
   model_info?: {
+    id?: string;
     key?: string;
     db_model?: boolean;
+    max_input_tokens?: number;
+    max_output_tokens?: number;
     input_cost_per_token?: number;
     output_cost_per_token?: number;
     huawei_maas?: {
@@ -48,6 +57,7 @@ export type ModelInfo = {
       name: string;
       tiered_pricing: boolean;
       currency: string;
+      pricing_unit?: string;
       pricing: {
         input: Array<{ start: number; end: number; tokenPriceUsdPerMillion: number }>;
         output: Array<{ start: number; end: number; tokenPriceUsdPerMillion: number }>;

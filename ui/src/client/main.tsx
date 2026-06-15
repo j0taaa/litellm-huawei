@@ -4,7 +4,7 @@ import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3
 import type { ApiKeyListRow, ApiKeyRow, ModelInfo, SessionUser, StatsBreakdownRow, StatsSummary, TeamRow } from "../shared/types";
 import "./styles.css";
 
-type RoutePath = "/stats" | "/keys" | "/teams" | `/stats/keys/${string}`;
+type RoutePath = "/stats" | "/keys" | "/teams" | "/models" | `/stats/keys/${string}`;
 type Tone = "green" | "blue" | "amber" | "violet" | "rose";
 type DurationUnit = "m" | "h" | "d";
 
@@ -86,10 +86,37 @@ const defaultKeyForm: KeyFormState = {
   models: []
 };
 
-const routes: Array<{ path: "/stats" | "/keys" | "/teams"; label: string; icon: React.ReactNode }> = [
+type ModelFormState = {
+  model_name: string;
+  upstream_model: string;
+  custom_llm_provider: string;
+  api_base: string;
+  api_key: string;
+  display_name: string;
+  max_input_tokens: string;
+  max_output_tokens: string;
+  input_cost_per_million: string;
+  output_cost_per_million: string;
+};
+
+const defaultModelForm: ModelFormState = {
+  model_name: "",
+  upstream_model: "",
+  custom_llm_provider: "openai",
+  api_base: "https://api-ap-southeast-1.modelarts-maas.com/openai/v1",
+  api_key: "os.environ/HUAWEI_MAAS_API_KEY",
+  display_name: "",
+  max_input_tokens: "",
+  max_output_tokens: "",
+  input_cost_per_million: "",
+  output_cost_per_million: ""
+};
+
+const routes: Array<{ path: "/stats" | "/keys" | "/teams" | "/models"; label: string; icon: React.ReactNode }> = [
   { path: "/stats", label: "Stats", icon: <BarChart3 size={18} /> },
   { path: "/keys", label: "Keys", icon: <KeyRound size={18} /> },
-  { path: "/teams", label: "Teams", icon: <Users size={18} /> }
+  { path: "/teams", label: "Teams", icon: <Users size={18} /> },
+  { path: "/models", label: "Models", icon: <Layers3 size={18} /> }
 ];
 
 function App() {
@@ -207,12 +234,13 @@ function renderRoute(route: RoutePath, navigate: (path: RoutePath) => void): Rea
   }
   if (route === "/keys") return <KeysPage />;
   if (route === "/teams") return <TeamsPage />;
+  if (route === "/models") return <ModelsPage />;
   return <StatsPage onNavigate={navigate} />;
 }
 
-function activeNavRoute(route: RoutePath): "/stats" | "/keys" | "/teams" {
+function activeNavRoute(route: RoutePath): "/stats" | "/keys" | "/teams" | "/models" {
   if (route.startsWith("/stats")) return "/stats";
-  if (route === "/keys" || route === "/teams") return route;
+  if (route === "/keys" || route === "/teams" || route === "/models") return route;
   return "/stats";
 }
 
@@ -603,6 +631,112 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
+function ModelsPage() {
+  const { data, loading, reload } = useResource<{ data?: ModelInfo[] }>("/api/models");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingModel, setEditingModel] = useState<ModelInfo | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<ModelFormState>(defaultModelForm);
+  const models = data?.data || [];
+
+  function openCreateModel() {
+    setEditingModel(null);
+    setForm(defaultModelForm);
+    setModalOpen(true);
+  }
+
+  function openEditModel(model: ModelInfo) {
+    setEditingModel(model);
+    setForm(modelFormFromInfo(model));
+    setModalOpen(true);
+  }
+
+  function closeModelModal() {
+    setModalOpen(false);
+    setEditingModel(null);
+    setForm(defaultModelForm);
+  }
+
+  async function saveModel(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    const payload = modelPayload(form, editingModel);
+    try {
+      if (editingModel?.model_info?.id) {
+        await api(`/api/models/${encodeURIComponent(editingModel.model_info.id)}`, { method: "PATCH", body: payload });
+      } else {
+        await api("/api/models", { method: "POST", body: payload });
+      }
+      closeModelModal();
+      reload();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteModel(model: ModelInfo) {
+    const modelId = model.model_info?.id;
+    if (!modelId) return;
+    await api(`/api/models/${encodeURIComponent(modelId)}`, { method: "DELETE" });
+    reload();
+  }
+
+  return (
+    <section>
+      <Header
+        icon={<Layers3 size={22} />}
+        title="Models"
+        tone="rose"
+        action={<div className="header-actions"><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button><button className="primary" onClick={openCreateModel}><Plus size={16} /> Add model</button></div>}
+      />
+      {modalOpen ? (
+        <Modal title={editingModel ? "Edit model" : "Add model"} onClose={closeModelModal}>
+          <form className="modal-form" onSubmit={saveModel}>
+            <label>Model name<input value={form.model_name} onChange={(e) => setForm({ ...form, model_name: e.target.value })} required /></label>
+            <label>Upstream model<input value={form.upstream_model} onChange={(e) => setForm({ ...form, upstream_model: e.target.value })} required /></label>
+            <label>Provider<input value={form.custom_llm_provider} onChange={(e) => setForm({ ...form, custom_llm_provider: e.target.value })} required /></label>
+            <label>API base<input value={form.api_base} onChange={(e) => setForm({ ...form, api_base: e.target.value })} required /></label>
+            <label>API key reference<input value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} required /></label>
+            <label>Display name<input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></label>
+            <fieldset className="config-section">
+              <span className="field-label">Limits and pricing</span>
+              <div className="config-grid">
+                <label>Max input tokens<input type="number" min="1" step="1" value={form.max_input_tokens} onChange={(e) => setForm({ ...form, max_input_tokens: e.target.value })} /></label>
+                <label>Max output tokens<input type="number" min="1" step="1" value={form.max_output_tokens} onChange={(e) => setForm({ ...form, max_output_tokens: e.target.value })} /></label>
+                <label>Input USD / 1M<input type="number" min="0" step="0.000001" value={form.input_cost_per_million} onChange={(e) => setForm({ ...form, input_cost_per_million: e.target.value })} /></label>
+                <label>Output USD / 1M<input type="number" min="0" step="0.000001" value={form.output_cost_per_million} onChange={(e) => setForm({ ...form, output_cost_per_million: e.target.value })} /></label>
+              </div>
+            </fieldset>
+            <div className="modal-actions"><button type="button" className="secondary" onClick={closeModelModal}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Saving" : editingModel ? "Save changes" : "Add model"}</button></div>
+          </form>
+        </Modal>
+      ) : null}
+      {loading ? <EmptyState text="Loading models" /> : (
+        <table>
+          <thead><tr><th>Name</th><th>Upstream</th><th>Provider</th><th>Context</th><th>Output</th><th>Input / 1M</th><th>Output / 1M</th><th></th></tr></thead>
+          <tbody>{models.map((model) => (
+            <tr key={model.model_info?.id || model.model_name}>
+              <td>{model.model_name}</td>
+              <td>{model.litellm_params?.model || "-"}</td>
+              <td>{model.litellm_params?.custom_llm_provider || "-"}</td>
+              <td>{model.model_info?.max_input_tokens || "-"}</td>
+              <td>{model.model_info?.max_output_tokens || "-"}</td>
+              <td>{perMillion(model.model_info?.input_cost_per_token)}</td>
+              <td>{perMillion(model.model_info?.output_cost_per_token)}</td>
+              <td>
+                <div className="row-actions">
+                  <button className="icon" onClick={() => openEditModel(model)} title="Edit model"><Pencil size={16} /></button>
+                  <button className="icon danger" onClick={() => deleteModel(model)} title="Delete model" disabled={!model.model_info?.id}><Trash2 size={16} /></button>
+                </div>
+              </td>
+            </tr>
+          ))}</tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
 function TeamsPage() {
   const { data, loading, reload } = useResource<TeamRow[] | { teams?: TeamRow[]; data?: TeamRow[] }>("/api/teams");
   const models = useResource<{ data?: ModelInfo[] }>("/api/models");
@@ -856,6 +990,69 @@ function stringField(value: Record<string, unknown>, key: string): string | null
   return typeof value[key] === "string" && value[key] ? value[key] : null;
 }
 
+function modelFormFromInfo(model: ModelInfo): ModelFormState {
+  const huaweiMaaS = model.model_info?.huawei_maas;
+  return {
+    model_name: model.model_name,
+    upstream_model: model.litellm_params?.model || model.model_info?.key || model.model_name,
+    custom_llm_provider: model.litellm_params?.custom_llm_provider || "openai",
+    api_base: model.litellm_params?.api_base || defaultModelForm.api_base,
+    api_key: model.litellm_params?.api_key || defaultModelForm.api_key,
+    display_name: huaweiMaaS?.name || model.model_name,
+    max_input_tokens: model.model_info?.max_input_tokens == null ? "" : String(model.model_info.max_input_tokens),
+    max_output_tokens: model.model_info?.max_output_tokens == null ? "" : String(model.model_info.max_output_tokens),
+    input_cost_per_million: costPerMillionString(model.model_info?.input_cost_per_token),
+    output_cost_per_million: costPerMillionString(model.model_info?.output_cost_per_token)
+  };
+}
+
+function modelPayload(form: ModelFormState, existing: ModelInfo | null): Record<string, unknown> {
+  const inputCost = form.input_cost_per_million ? Number(form.input_cost_per_million) / 1_000_000 : undefined;
+  const outputCost = form.output_cost_per_million ? Number(form.output_cost_per_million) / 1_000_000 : undefined;
+  const maxInput = form.max_input_tokens ? Number(form.max_input_tokens) : undefined;
+  const maxOutput = form.max_output_tokens ? Number(form.max_output_tokens) : undefined;
+  const modelInfo = clean({
+    ...(existing?.model_info || {}),
+    id: existing?.model_info?.id || modelIdForName(form.model_name),
+    db_model: true,
+    key: form.upstream_model,
+    mode: "chat",
+    litellm_provider: form.custom_llm_provider,
+    max_tokens: maxOutput,
+    max_input_tokens: maxInput,
+    max_output_tokens: maxOutput,
+    input_cost_per_token: inputCost,
+    output_cost_per_token: outputCost,
+    huawei_maas: clean({
+      ...(existing?.model_info?.huawei_maas || {}),
+      id: form.upstream_model,
+      name: form.display_name || form.model_name,
+      tiered_pricing: existing?.model_info?.huawei_maas?.tiered_pricing || false,
+      currency: existing?.model_info?.huawei_maas?.currency || "USD",
+      pricing_unit: existing?.model_info?.huawei_maas?.pricing_unit || "1M tokens",
+      pricing: existing?.model_info?.huawei_maas?.pricing || { input: [], output: [] }
+    })
+  });
+  return {
+    model_name: form.model_name,
+    litellm_params: {
+      model: form.upstream_model,
+      custom_llm_provider: form.custom_llm_provider,
+      api_base: form.api_base,
+      api_key: form.api_key
+    },
+    model_info: modelInfo
+  };
+}
+
+function modelIdForName(modelName: string): string {
+  return `custom-${modelName.trim().replace(/[^A-Za-z0-9_-]+/g, "-")}`;
+}
+
+function costPerMillionString(value?: number): string {
+  return value == null ? "" : String(Number((value * 1_000_000).toFixed(6)));
+}
+
 function normalizeKeyRow(row: ApiKeyListRow): ApiKeyRow {
   return typeof row === "string" ? { token: row } : row;
 }
@@ -871,6 +1068,10 @@ function mask(value?: string | null): string {
 
 function currency(value: number): string {
   return `$${value.toFixed(value < 1 ? 6 : 2)}`;
+}
+
+function perMillion(value?: number): string {
+  return value == null ? "-" : `$${(value * 1_000_000).toFixed(6)}`;
 }
 
 function formatCell(value: unknown): string {

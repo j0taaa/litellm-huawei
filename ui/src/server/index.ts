@@ -47,6 +47,45 @@ app.get("/api/models", async (request, reply) => {
   return normalizeModelInfoResponse(await litellm.request("/model/info", session.litellmKey));
 });
 
+app.post("/api/models", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  return litellm.request("/model/new", session.litellmKey, {
+    method: "POST",
+    body: JSON.stringify(request.body || {})
+  });
+});
+
+app.patch("/api/models/:modelId", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ modelId: z.string().min(1) }).parse(request.params);
+  const body = request.body as Record<string, unknown> || {};
+  const replacement = {
+    ...body,
+    model_info: {
+      ...objectField(body, "model_info"),
+      id: params.modelId,
+      db_model: true
+    }
+  };
+  await litellm.request("/model/delete", session.litellmKey, {
+    method: "POST",
+    body: JSON.stringify({ id: params.modelId })
+  });
+  return litellm.request("/model/new", session.litellmKey, {
+    method: "POST",
+    body: JSON.stringify(replacement)
+  });
+});
+
+app.delete("/api/models/:modelId", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ modelId: z.string().min(1) }).parse(request.params);
+  return litellm.request("/model/delete", session.litellmKey, {
+    method: "POST",
+    body: JSON.stringify({ id: params.modelId })
+  });
+});
+
 app.get("/api/keys", async (request, reply) => {
   const session = await requireSession(request, reply);
   const query = new URLSearchParams(request.query as Record<string, string>);

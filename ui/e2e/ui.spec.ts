@@ -9,7 +9,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Stats" })).toBeVisible();
   await expect(page).toHaveURL(/\/stats$/);
-  await expect(page.getByText("Models")).toBeVisible();
+  await expect(page.getByRole("main").getByText("Models")).toBeVisible();
 
   await page.getByRole("link", { name: "Keys" }).click();
   await expect(page.getByRole("heading", { name: "Keys" })).toBeVisible();
@@ -173,7 +173,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   });
   expect(clonePayload).not.toHaveProperty("key");
   await page.getByRole("button", { name: "Done" }).click();
-  await page.getByTitle("Delete key").first().click();
+  await expect(page.getByRole("dialog", { name: "Clone key" })).toBeHidden();
+  await page.getByRole("row", { name: /Delete test/ }).getByTitle("Delete key").click();
   expect(deletePayload).toEqual({ keys: ["hash-delete-test"] });
 
   await page.getByRole("link", { name: "Teams" }).click();
@@ -181,9 +182,72 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page).toHaveURL(/\/teams$/);
   await expect(page.getByPlaceholder("Team alias")).toBeVisible();
 
+  let modelCreatePayload: Record<string, any> | undefined;
+  let modelUpdatePayload: Record<string, any> | undefined;
+  let modelDeleteUrl = "";
+  await page.route("**/api/models**", async (route) => {
+    const method = route.request().method();
+    if (method === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: [{
+            model_name: "glm-test",
+            litellm_params: { model: "glm-test-upstream", custom_llm_provider: "openai", api_base: "https://example.com/v1", api_key: "os.environ/HUAWEI_MAAS_API_KEY" },
+            model_info: { id: "model-glm-test", key: "glm-test-upstream", max_input_tokens: 1000, max_output_tokens: 500, input_cost_per_token: 0.000001, output_cost_per_token: 0.000002, huawei_maas: { id: "glm-test-upstream", name: "GLM Test", currency: "USD", tiered_pricing: false, pricing: { input: [], output: [] } } }
+          }]
+        })
+      });
+      return;
+    }
+    if (method === "POST") {
+      modelCreatePayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    if (method === "PATCH") {
+      modelUpdatePayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    if (method === "DELETE") {
+      modelDeleteUrl = route.request().url();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.getByRole("link", { name: "Models" }).click();
+  await expect(page.getByRole("heading", { name: "Models" })).toBeVisible();
+  await expect(page).toHaveURL(/\/models$/);
+  await expect(page.getByRole("cell", { name: "glm-test", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Add model" }).click();
+  await page.getByLabel("Model name").fill("new-model");
+  await page.getByLabel("Upstream model").fill("new-upstream");
+  await page.getByLabel("Provider").fill("openai");
+  await page.getByLabel("API base").fill("https://example.com/v1");
+  await page.getByLabel("API key reference").fill("os.environ/HUAWEI_MAAS_API_KEY");
+  await page.getByLabel("Input USD / 1M").fill("1.5");
+  await page.getByLabel("Output USD / 1M").fill("2.5");
+  await page.getByRole("dialog").getByRole("button", { name: "Add model" }).click();
+  expect(modelCreatePayload).toMatchObject({
+    model_name: "new-model",
+    litellm_params: { model: "new-upstream", custom_llm_provider: "openai" },
+    model_info: { id: "custom-new-model", key: "new-upstream", input_cost_per_token: 0.0000015, output_cost_per_token: 0.0000025 }
+  });
+  await page.getByTitle("Edit model").first().click();
+  await expect(page.getByRole("dialog", { name: "Edit model" })).toBeVisible();
+  await expect(page.getByLabel("Model name")).toHaveValue("glm-test");
+  await page.getByLabel("Display name").fill("GLM Edited");
+  await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
+  expect(modelUpdatePayload).toMatchObject({ model_name: "glm-test", model_info: { id: "model-glm-test", huawei_maas: { name: "GLM Edited" } } });
+  await page.getByTitle("Delete model").first().click();
+  expect(modelDeleteUrl).toContain("/api/models/model-glm-test");
+
   await page.goBack();
-  await expect(page.getByRole("heading", { name: "Keys" })).toBeVisible();
-  await expect(page).toHaveURL(/\/keys$/);
+  await expect(page.getByRole("heading", { name: "Teams" })).toBeVisible();
+  await expect(page).toHaveURL(/\/teams$/);
 });
 
 test("direct route keeps destination after login", async ({ page }) => {
