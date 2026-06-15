@@ -350,7 +350,7 @@ function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => void }) {
             <Metric icon={<Users size={18} />} tone="violet" label="Teams" value={String(data.totals.teams)} />
             <Metric icon={<Layers3 size={18} />} tone="rose" label="Models" value={String(data.totals.models)} />
           </div>
-          <StatsCharts spendTitle="Spend by team" spendRows={data.byTeam} modelRows={data.byModel} />
+          <StatsCharts spendTitle="Spend by team" spendRows={data.byTeam} modelRows={data.byModel} keyRows={data.byKey} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="By model" rows={data.byModel} />
             <Breakdown icon={<KeyRound size={16} />} tone="amber" title="By key" rows={data.byKey} onRowClick={(row) => onNavigate(`/stats/keys/${encodeURIComponent(row.id || row.name)}`)} />
@@ -386,7 +386,7 @@ function KeyStatsPage({ keyId, onBack }: { keyId: string; onBack: () => void }) 
             <Metric icon={<Users size={18} />} tone="violet" label="Teams" value={String(data.byTeam.length)} />
             <Metric icon={<KeyRound size={18} />} tone="amber" label="Key rows" value={String(data.byKey.length)} />
           </div>
-          <StatsCharts spendTitle="Key spend by model" spendRows={data.byModel} modelRows={data.byModel} />
+          <StatsCharts spendTitle="Key spend by model" spendRows={data.byModel} modelRows={data.byModel} keyRows={data.byKey} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="Models" rows={data.byModel} />
             <Breakdown icon={<Users size={16} />} tone="violet" title="Teams" rows={data.byTeam} />
@@ -422,7 +422,7 @@ function TeamStatsPage({ teamId, onBack }: { teamId: string; onBack: () => void 
             <Metric icon={<KeyRound size={18} />} tone="amber" label="Keys" value={String(data.byKey.length)} />
             <Metric icon={<Users size={18} />} tone="violet" label="Team rows" value={String(data.byTeam.length)} />
           </div>
-          <StatsCharts spendTitle="Team spend by key" spendRows={data.byKey} modelRows={data.byModel} />
+          <StatsCharts spendTitle="Team spend by key" spendRows={data.byKey} modelRows={data.byModel} keyRows={data.byKey} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="Models" rows={data.byModel} />
             <Breakdown icon={<KeyRound size={16} />} tone="amber" title="Keys" rows={data.byKey} />
@@ -1429,16 +1429,18 @@ function Breakdown({ icon, tone, title, rows, onRowClick }: { icon: React.ReactN
 
 const chartColors = ["#14745f", "#2563eb", "#d97706", "#7c3aed", "#e0526f", "#52605b"];
 
-function StatsCharts({ spendTitle, spendRows, modelRows }: { spendTitle: string; spendRows: StatsBreakdownRow[]; modelRows: StatsBreakdownRow[] }) {
+function StatsCharts({ spendTitle, spendRows, modelRows, keyRows }: { spendTitle: string; spendRows: StatsBreakdownRow[]; modelRows: StatsBreakdownRow[]; keyRows: StatsBreakdownRow[] }) {
   return (
     <div className="chart-grid">
       <DonutChart title={spendTitle} rows={spendRows.slice(0, 6).map((row, index) => ({ ...row, color: chartColors[index % chartColors.length] }))} />
+      <DonutChart title="Spend by model %" rows={modelRows.slice(0, 6).map((row, index) => ({ ...row, color: chartColors[index % chartColors.length] }))} showPercent />
+      <SpendBarChart title="Spend by key" rows={keyRows.slice(0, 6)} color="#d97706" />
       <BarChart title="Requests by model" rows={modelRows.slice(0, 6)} color="#2563eb" />
     </div>
   );
 }
 
-function DonutChart({ title, rows }: { title: string; rows: Array<StatsBreakdownRow & { color: string }> }) {
+function DonutChart({ title, rows, showPercent = false }: { title: string; rows: Array<StatsBreakdownRow & { color: string }>; showPercent?: boolean }) {
   const total = rows.reduce((sum, row) => sum + row.spend, 0);
   let offset = 0;
   return (
@@ -1458,8 +1460,29 @@ function DonutChart({ title, rows }: { title: string; rows: Array<StatsBreakdown
           <text x="60" y="72" textAnchor="middle" className="chart-label">total</text>
         </svg>
         <div className="chart-legend">
-          {rows.map((row) => <div className="legend-row" key={row.name}><span className="legend-dot" style={{ background: row.color }} /> <span>{row.name}</span><strong>{currency(row.spend)}</strong></div>)}
+          {rows.map((row) => {
+            const percent = total > 0 ? `${((row.spend / total) * 100).toFixed(1)}%` : "0.0%";
+            return <div className="legend-row" key={row.name}><span className="legend-dot" style={{ background: row.color }} /> <span>{row.name}</span><strong>{showPercent ? percent : currency(row.spend)}</strong></div>;
+          })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SpendBarChart({ title, rows, color }: { title: string; rows: StatsBreakdownRow[]; color: string }) {
+  const maxSpend = Math.max(0.000001, ...rows.map((row) => row.spend));
+  return (
+    <div className="panel chart-panel">
+      <PanelTitle icon={<DollarSign size={16} />} title={title} />
+      <div className="bar-chart" role="img" aria-label={title}>
+        {rows.length ? rows.map((row) => (
+          <div className="chart-bar-row" key={row.id || row.name}>
+            <span title={row.name}>{row.name}</span>
+            <div className="chart-bar-track"><div className="chart-bar-fill" style={{ width: `${Math.max(4, (row.spend / maxSpend) * 100)}%`, background: color }} /></div>
+            <strong>{currency(row.spend)}</strong>
+          </div>
+        )) : <p className="muted">No spend</p>}
       </div>
     </div>
   );

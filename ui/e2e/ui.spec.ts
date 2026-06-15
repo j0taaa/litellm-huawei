@@ -478,6 +478,8 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
 
   await expect(page.getByRole("heading", { name: "Stats" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Spend by team" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Spend by model %" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Spend by key" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Requests by model" })).toBeVisible();
   await expect(page.getByText("1-10 of 12")).toBeVisible();
   await expect(page.getByText("Page 1 of 2")).toBeVisible();
