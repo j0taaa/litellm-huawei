@@ -350,6 +350,7 @@ function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => void }) {
             <Metric icon={<Users size={18} />} tone="violet" label="Teams" value={String(data.totals.teams)} />
             <Metric icon={<Layers3 size={18} />} tone="rose" label="Models" value={String(data.totals.models)} />
           </div>
+          <StatsCharts modelRows={data.byModel} keyRows={data.byKey} teamRows={data.byTeam} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="By model" rows={data.byModel} />
             <Breakdown icon={<KeyRound size={16} />} tone="amber" title="By key" rows={data.byKey} onRowClick={(row) => onNavigate(`/stats/keys/${encodeURIComponent(row.id || row.name)}`)} />
@@ -385,6 +386,7 @@ function KeyStatsPage({ keyId, onBack }: { keyId: string; onBack: () => void }) 
             <Metric icon={<Users size={18} />} tone="violet" label="Teams" value={String(data.byTeam.length)} />
             <Metric icon={<KeyRound size={18} />} tone="amber" label="Key rows" value={String(data.byKey.length)} />
           </div>
+          <StatsCharts modelRows={data.byModel} keyRows={data.byKey} teamRows={data.byTeam} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="Models" rows={data.byModel} />
             <Breakdown icon={<Users size={16} />} tone="violet" title="Teams" rows={data.byTeam} />
@@ -420,6 +422,7 @@ function TeamStatsPage({ teamId, onBack }: { teamId: string; onBack: () => void 
             <Metric icon={<KeyRound size={18} />} tone="amber" label="Keys" value={String(data.byKey.length)} />
             <Metric icon={<Users size={18} />} tone="violet" label="Team rows" value={String(data.byTeam.length)} />
           </div>
+          <StatsCharts modelRows={data.byModel} keyRows={data.byKey} teamRows={data.byTeam} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="Models" rows={data.byModel} />
             <Breakdown icon={<KeyRound size={16} />} tone="amber" title="Keys" rows={data.byKey} />
@@ -1420,6 +1423,64 @@ function Breakdown({ icon, tone, title, rows, onRowClick }: { icon: React.ReactN
           <div className="bar-row" key={row.id || row.name}>{content}</div>
         );
       }) : <p className="muted">No data</p>}
+    </div>
+  );
+}
+
+function StatsCharts({ modelRows, keyRows, teamRows }: { modelRows: StatsBreakdownRow[]; keyRows: StatsBreakdownRow[]; teamRows: StatsBreakdownRow[] }) {
+  return (
+    <div className="chart-grid">
+      <DonutChart title="Spend distribution" rows={[
+        { name: "Models", spend: modelRows.reduce((total, row) => total + row.spend, 0), color: "#e0526f" },
+        { name: "Keys", spend: keyRows.reduce((total, row) => total + row.spend, 0), color: "#d97706" },
+        { name: "Teams", spend: teamRows.reduce((total, row) => total + row.spend, 0), color: "#7c3aed" }
+      ]} />
+      <BarChart title="Requests by model" rows={modelRows.slice(0, 6)} color="#2563eb" />
+    </div>
+  );
+}
+
+function DonutChart({ title, rows }: { title: string; rows: Array<{ name: string; spend: number; color: string }> }) {
+  const total = rows.reduce((sum, row) => sum + row.spend, 0);
+  let offset = 0;
+  return (
+    <div className="panel chart-panel">
+      <PanelTitle icon={<DollarSign size={16} />} title={title} />
+      <div className="donut-layout">
+        <svg className="donut-chart" viewBox="0 0 120 120" role="img" aria-label={title}>
+          <circle cx="60" cy="60" r="42" fill="none" stroke="#edf2f0" strokeWidth="18" />
+          {total > 0 ? rows.map((row) => {
+            const fraction = row.spend / total;
+            const dash = fraction * 263.89;
+            const segment = <circle key={row.name} cx="60" cy="60" r="42" fill="none" stroke={row.color} strokeWidth="18" strokeDasharray={`${dash} ${263.89 - dash}`} strokeDashoffset={-offset} pathLength="263.89" />;
+            offset += dash;
+            return segment;
+          }) : null}
+          <text x="60" y="56" textAnchor="middle" className="chart-value">{currency(total)}</text>
+          <text x="60" y="72" textAnchor="middle" className="chart-label">total</text>
+        </svg>
+        <div className="chart-legend">
+          {rows.map((row) => <div className="legend-row" key={row.name}><span className="legend-dot" style={{ background: row.color }} /> <span>{row.name}</span><strong>{currency(row.spend)}</strong></div>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BarChart({ title, rows, color }: { title: string; rows: StatsBreakdownRow[]; color: string }) {
+  const maxRequests = Math.max(1, ...rows.map((row) => row.requests));
+  return (
+    <div className="panel chart-panel">
+      <PanelTitle icon={<Activity size={16} />} title={title} />
+      <div className="bar-chart" role="img" aria-label={title}>
+        {rows.length ? rows.map((row) => (
+          <div className="chart-bar-row" key={row.id || row.name}>
+            <span title={row.name}>{row.name}</span>
+            <div className="chart-bar-track"><div className="chart-bar-fill" style={{ width: `${Math.max(4, (row.requests / maxRequests) * 100)}%`, background: color }} /></div>
+            <strong>{row.requests}</strong>
+          </div>
+        )) : <p className="muted">No requests</p>}
+      </div>
     </div>
   );
 }

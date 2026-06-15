@@ -161,6 +161,23 @@ nav { display: grid; align-content: start; gap: 8px; }
 .metric span, .muted { color: var(--muted); font-size: 13px; }
 .metric strong { font-size: 22px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.chart-grid { display: grid; grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr); gap: 12px; margin-bottom: 14px; }
+.chart-panel { min-height: 230px; }
+.donut-layout { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 14px; }
+.donut-chart { width: 150px; height: 150px; transform: rotate(-90deg); }
+.donut-chart text { transform: rotate(90deg); transform-origin: 60px 60px; }
+.chart-value { font-size: 12px; font-weight: 800; fill: #20302b; }
+.chart-label { font-size: 9px; fill: var(--muted); }
+.chart-legend { display: grid; gap: 8px; }
+.legend-row { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
+.legend-row strong { color: #20302b; }
+.legend-dot { width: 9px; height: 9px; border-radius: 999px; }
+.bar-chart { display: grid; gap: 10px; }
+.chart-bar-row { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(120px, 2fr) 42px; align-items: center; gap: 10px; font-size: 13px; }
+.chart-bar-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #20302b; }
+.chart-bar-row strong { text-align: right; color: #20302b; }
+.chart-bar-track { height: 10px; background: #edf2f0; border-radius: 999px; overflow: hidden; }
+.chart-bar-fill { height: 100%; border-radius: 999px; }
 .panel.green { border-top: 3px solid var(--green); }
 .panel.amber { border-top: 3px solid var(--amber); }
 .panel.violet { border-top: 3px solid var(--violet); }
@@ -495,7 +512,8 @@ code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
   nav { grid-template-columns: repeat(3, 1fr); }
   .nav { justify-content: center; }
   .account { display: none; }
-  .metrics, .grid3, .toolbar { grid-template-columns: 1fr; }
+  .metrics, .grid3, .toolbar, .chart-grid, .donut-layout { grid-template-columns: 1fr; }
+  .donut-chart { justify-self: center; }
   .modal-form, .model-checks, .duration-controls, .config-grid, .schedule-grid, .test-controls, .chat-composer { grid-template-columns: 1fr; }
   .chat-message { width: 100%; }
   .weekday-checks { grid-template-columns: repeat(4, minmax(0, 1fr)); }
