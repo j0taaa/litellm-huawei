@@ -377,11 +377,36 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("API key reference").fill("os.environ/HUAWEI_MAAS_API_KEY");
   await page.getByLabel("Input USD / 1M").fill("1.5");
   await page.getByLabel("Output USD / 1M").fill("2.5");
+  await page.getByLabel("Use pricing ranges").check();
+  await expect(page.getByLabel("Range 1 from tokens")).toHaveValue("0");
+  await expect(page.getByLabel("Range 1 to tokens")).toHaveValue("31999");
+  await expect(page.getByLabel("Range 1 input USD per 1M")).toHaveValue("1.5");
+  await expect(page.getByLabel("Range 1 output USD per 1M")).toHaveValue("2.5");
+  await page.getByLabel("Range 2 input USD per 1M").fill("2");
+  await page.getByLabel("Range 2 output USD per 1M").fill("3");
   await page.getByRole("dialog").getByRole("button", { name: "Add model" }).click();
   expect(modelCreatePayload).toMatchObject({
     model_name: "new-model",
     litellm_params: { model: "new-upstream", custom_llm_provider: "openai" },
-    model_info: { id: "custom-new-model", key: "new-upstream", input_cost_per_token: 0.0000015, output_cost_per_token: 0.0000025 }
+    model_info: {
+      id: "custom-new-model",
+      key: "new-upstream",
+      input_cost_per_token: 0.0000015,
+      output_cost_per_token: 0.0000025,
+      huawei_maas: {
+        tiered_pricing: true,
+        pricing: {
+          input: [
+            { start: 0, end: 31999, tokenPriceUsdPerMillion: 1.5 },
+            { start: 32000, end: 1000000, tokenPriceUsdPerMillion: 2 }
+          ],
+          output: [
+            { start: 0, end: 31999, tokenPriceUsdPerMillion: 2.5 },
+            { start: 32000, end: 1000000, tokenPriceUsdPerMillion: 3 }
+          ]
+        }
+      }
+    }
   });
   await page.getByTitle("Edit model").first().click();
   await expect(page.getByRole("dialog", { name: "Edit model" })).toBeVisible();

@@ -149,6 +149,15 @@ type ModelFormState = {
   max_output_tokens: string;
   input_cost_per_million: string;
   output_cost_per_million: string;
+  tiered_pricing: boolean;
+  pricing_ranges: PricingRangeForm[];
+};
+
+type PricingRangeForm = {
+  start: string;
+  end: string;
+  input_cost_per_million: string;
+  output_cost_per_million: string;
 };
 
 type PolicyFormState = {
@@ -194,7 +203,9 @@ const defaultModelForm: ModelFormState = {
   max_input_tokens: "",
   max_output_tokens: "",
   input_cost_per_million: "",
-  output_cost_per_million: ""
+  output_cost_per_million: "",
+  tiered_pricing: false,
+  pricing_ranges: defaultPricingRanges()
 };
 
 const routes: Array<{ path: "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/test"; label: string; icon: React.ReactNode }> = [
@@ -1115,6 +1126,31 @@ function ModelsPage() {
     setForm(defaultModelForm);
   }
 
+  function updatePricingRange(index: number, patch: Partial<PricingRangeForm>) {
+    setForm((current) => ({
+      ...current,
+      pricing_ranges: current.pricing_ranges.map((range, rangeIndex) => rangeIndex === index ? { ...range, ...patch } : range)
+    }));
+  }
+
+  function addPricingRange() {
+    setForm((current) => {
+      const previous = current.pricing_ranges.at(-1);
+      const nextStart = previous?.end && Number.isFinite(Number(previous.end)) ? String(Number(previous.end) + 1) : "";
+      return {
+        ...current,
+        pricing_ranges: [...current.pricing_ranges, { start: nextStart, end: "1000000", input_cost_per_million: "", output_cost_per_million: "" }]
+      };
+    });
+  }
+
+  function removePricingRange(index: number) {
+    setForm((current) => ({
+      ...current,
+      pricing_ranges: current.pricing_ranges.filter((_range, rangeIndex) => rangeIndex !== index)
+    }));
+  }
+
   async function saveModel(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -1164,6 +1200,34 @@ function ModelsPage() {
                 <label>Input USD / 1M<input type="number" min="0" step="0.000001" value={form.input_cost_per_million} onChange={(e) => setForm({ ...form, input_cost_per_million: e.target.value })} /></label>
                 <label>Output USD / 1M<input type="number" min="0" step="0.000001" value={form.output_cost_per_million} onChange={(e) => setForm({ ...form, output_cost_per_million: e.target.value })} /></label>
               </div>
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={form.tiered_pricing}
+                  onChange={(event) => setForm({
+                    ...form,
+                    tiered_pricing: event.target.checked,
+                    pricing_ranges: event.target.checked && !form.tiered_pricing
+                      ? defaultPricingRanges(form.input_cost_per_million, form.output_cost_per_million)
+                      : form.pricing_ranges.length ? form.pricing_ranges : defaultPricingRanges()
+                  })}
+                />
+                Use pricing ranges
+              </label>
+              {form.tiered_pricing ? (
+                <div className="pricing-ranges">
+                  {form.pricing_ranges.map((range, index) => (
+                    <div className="pricing-range" key={index}>
+                      <label>From tokens<input aria-label={`Range ${index + 1} from tokens`} type="number" min="0" step="1" value={range.start} onChange={(e) => updatePricingRange(index, { start: e.target.value })} required /></label>
+                      <label>To tokens<input aria-label={`Range ${index + 1} to tokens`} type="number" min="1" step="1" value={range.end} onChange={(e) => updatePricingRange(index, { end: e.target.value })} required /></label>
+                      <label>Input USD / 1M<input aria-label={`Range ${index + 1} input USD per 1M`} type="number" min="0" step="0.000001" value={range.input_cost_per_million} onChange={(e) => updatePricingRange(index, { input_cost_per_million: e.target.value })} required /></label>
+                      <label>Output USD / 1M<input aria-label={`Range ${index + 1} output USD per 1M`} type="number" min="0" step="0.000001" value={range.output_cost_per_million} onChange={(e) => updatePricingRange(index, { output_cost_per_million: e.target.value })} required /></label>
+                      <button type="button" className="icon danger" title="Remove pricing range" onClick={() => removePricingRange(index)} disabled={form.pricing_ranges.length === 1}><Trash2 size={16} /></button>
+                    </div>
+                  ))}
+                  <button type="button" className="secondary pricing-add" onClick={addPricingRange}><Plus size={16} /> Add range</button>
+                </div>
+              ) : null}
             </fieldset>
             <div className="modal-actions"><button type="button" className="secondary" onClick={closeModelModal}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Saving" : editingModel ? "Save changes" : "Add model"}</button></div>
           </form>
@@ -1818,6 +1882,7 @@ function stringField(value: Record<string, unknown>, key: string): string | null
 
 function modelFormFromInfo(model: ModelInfo): ModelFormState {
   const huaweiMaaS = model.model_info?.huawei_maas;
+  const pricingRanges = pricingRangesFromInfo(model);
   return {
     model_name: model.model_name,
     upstream_model: model.litellm_params?.model || model.model_info?.key || model.model_name,
@@ -1828,15 +1893,35 @@ function modelFormFromInfo(model: ModelInfo): ModelFormState {
     max_input_tokens: model.model_info?.max_input_tokens == null ? "" : String(model.model_info.max_input_tokens),
     max_output_tokens: model.model_info?.max_output_tokens == null ? "" : String(model.model_info.max_output_tokens),
     input_cost_per_million: costPerMillionString(model.model_info?.input_cost_per_token),
-    output_cost_per_million: costPerMillionString(model.model_info?.output_cost_per_token)
+    output_cost_per_million: costPerMillionString(model.model_info?.output_cost_per_token),
+    tiered_pricing: Boolean(huaweiMaaS?.tiered_pricing),
+    pricing_ranges: pricingRanges.length ? pricingRanges : defaultPricingRanges(
+      costPerMillionString(model.model_info?.input_cost_per_token),
+      costPerMillionString(model.model_info?.output_cost_per_token)
+    )
   };
 }
 
 function modelPayload(form: ModelFormState, existing: ModelInfo | null): Record<string, unknown> {
-  const inputCost = form.input_cost_per_million ? Number(form.input_cost_per_million) / 1_000_000 : undefined;
-  const outputCost = form.output_cost_per_million ? Number(form.output_cost_per_million) / 1_000_000 : undefined;
+  const pricingRanges = form.tiered_pricing ? normalizedPricingRanges(form.pricing_ranges) : [];
+  const inputCostPerMillion = pricingRanges[0]?.input_cost_per_million || form.input_cost_per_million;
+  const outputCostPerMillion = pricingRanges[0]?.output_cost_per_million || form.output_cost_per_million;
+  const inputCost = inputCostPerMillion ? Number(inputCostPerMillion) / 1_000_000 : undefined;
+  const outputCost = outputCostPerMillion ? Number(outputCostPerMillion) / 1_000_000 : undefined;
   const maxInput = form.max_input_tokens ? Number(form.max_input_tokens) : undefined;
   const maxOutput = form.max_output_tokens ? Number(form.max_output_tokens) : undefined;
+  const huaweiPricing = {
+    input: pricingRanges.map((range) => ({
+      start: Number(range.start),
+      end: Number(range.end),
+      tokenPriceUsdPerMillion: Number(range.input_cost_per_million)
+    })),
+    output: pricingRanges.map((range) => ({
+      start: Number(range.start),
+      end: Number(range.end),
+      tokenPriceUsdPerMillion: Number(range.output_cost_per_million)
+    }))
+  };
   const modelInfo = clean({
     ...(existing?.model_info || {}),
     id: existing?.model_info?.id || modelIdForName(form.model_name),
@@ -1853,10 +1938,10 @@ function modelPayload(form: ModelFormState, existing: ModelInfo | null): Record<
       ...(existing?.model_info?.huawei_maas || {}),
       id: form.upstream_model,
       name: form.display_name || form.model_name,
-      tiered_pricing: existing?.model_info?.huawei_maas?.tiered_pricing || false,
+      tiered_pricing: form.tiered_pricing,
       currency: existing?.model_info?.huawei_maas?.currency || "USD",
       pricing_unit: existing?.model_info?.huawei_maas?.pricing_unit || "1M tokens",
-      pricing: existing?.model_info?.huawei_maas?.pricing || { input: [], output: [] }
+      pricing: form.tiered_pricing ? huaweiPricing : { input: [], output: [] }
     })
   });
   return {
@@ -1873,6 +1958,35 @@ function modelPayload(form: ModelFormState, existing: ModelInfo | null): Record<
 
 function modelIdForName(modelName: string): string {
   return `custom-${modelName.trim().replace(/[^A-Za-z0-9_-]+/g, "-")}`;
+}
+
+function defaultPricingRanges(inputCost = "", outputCost = ""): PricingRangeForm[] {
+  return [
+    { start: "0", end: "31999", input_cost_per_million: inputCost, output_cost_per_million: outputCost },
+    { start: "32000", end: "1000000", input_cost_per_million: "", output_cost_per_million: "" }
+  ];
+}
+
+function pricingRangesFromInfo(model: ModelInfo): PricingRangeForm[] {
+  const input = model.model_info?.huawei_maas?.pricing?.input || [];
+  const output = model.model_info?.huawei_maas?.pricing?.output || [];
+  const count = Math.max(input.length, output.length);
+  return Array.from({ length: count }, (_value, index) => {
+    const inputRange = input[index];
+    const outputRange = output[index];
+    return {
+      start: String(inputRange?.start ?? outputRange?.start ?? ""),
+      end: String(inputRange?.end ?? outputRange?.end ?? ""),
+      input_cost_per_million: inputRange?.tokenPriceUsdPerMillion == null ? "" : String(inputRange.tokenPriceUsdPerMillion),
+      output_cost_per_million: outputRange?.tokenPriceUsdPerMillion == null ? "" : String(outputRange.tokenPriceUsdPerMillion)
+    };
+  }).filter((range) => range.start || range.end || range.input_cost_per_million || range.output_cost_per_million);
+}
+
+function normalizedPricingRanges(ranges: PricingRangeForm[]): PricingRangeForm[] {
+  return ranges
+    .filter((range) => range.start && range.end && range.input_cost_per_million && range.output_cost_per_million)
+    .sort((a, b) => Number(a.start) - Number(b.start));
 }
 
 function costPerMillionString(value?: number): string {

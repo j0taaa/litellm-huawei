@@ -343,6 +343,26 @@ nav { display: grid; align-content: start; gap: 8px; }
   gap: 10px;
 }
 
+.pricing-ranges {
+  display: grid;
+  gap: 10px;
+}
+
+.pricing-range {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid #dfe8e4;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pricing-add {
+  justify-self: start;
+}
+
 .model-access-header {
   display: flex;
   align-items: center;
@@ -523,7 +543,7 @@ code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
   .account { display: none; }
   .metrics, .grid3, .toolbar, .chart-grid, .donut-layout { grid-template-columns: 1fr; }
   .donut-chart { justify-self: center; }
-  .modal-form, .model-checks, .duration-controls, .config-grid, .schedule-grid, .test-controls, .chat-composer { grid-template-columns: 1fr; }
+  .modal-form, .model-checks, .duration-controls, .config-grid, .pricing-range, .schedule-grid, .test-controls, .chat-composer { grid-template-columns: 1fr; }
   .chat-message { width: 100%; }
   .weekday-checks { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .content { padding: 14px; }
