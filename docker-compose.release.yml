@@ -1,0 +1,124 @@
+name: huawei-litellm-ui
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-litellm}
+      POSTGRES_USER: ${POSTGRES_USER:-litellm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-litellm-password-change-me}
+    volumes:
+      - litellm_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  config-sync:
+    image: ghcr.io/j0taaa/litellm-huawei-tools:${IMAGE_TAG:-latest}
+    environment:
+      CATALOG_URL: ${CATALOG_URL:-https://catalog.hwctools.site/models}
+    volumes:
+      - huawei_generated:/workspace/generated
+    command:
+      - python
+      - -m
+      - huawei_litellm.sync
+      - --config-out
+      - generated/config.yaml
+      - --catalog-out
+      - generated/huawei_catalog.json
+      - --seed-out
+      - generated/model_seed.json
+    restart: "no"
+
+  litellm:
+    image: ghcr.io/j0taaa/litellm-huawei-litellm:${IMAGE_TAG:-latest}
+    depends_on:
+      db:
+        condition: service_healthy
+      config-sync:
+        condition: service_completed_successfully
+    ports:
+      - "${HOST_PORT:-4000}:4000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-litellm}:${POSTGRES_PASSWORD:-litellm-password-change-me}@db:5432/${POSTGRES_DB:-litellm}
+      HUAWEI_MAAS_API_KEY: ${HUAWEI_MAAS_API_KEY:?set HUAWEI_MAAS_API_KEY in .env}
+      HUAWEI_MAAS_CATALOG_PATH: /app/generated/huawei_catalog.json
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-huawei-maas-local}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:?set LITELLM_SALT_KEY in .env}
+      LITELLM_LOG: ${LITELLM_LOG:-INFO}
+      STORE_MODEL_IN_DB: "True"
+    volumes:
+      - huawei_generated:/app/generated:ro
+    command:
+      - --config
+      - /app/generated/config.yaml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "4000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/readiness', timeout=3).read()"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  model-seed:
+    image: ghcr.io/j0taaa/litellm-huawei-tools:${IMAGE_TAG:-latest}
+    depends_on:
+      litellm:
+        condition: service_healthy
+    environment:
+      LITELLM_BASE_URL: http://litellm:4000
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-huawei-maas-local}
+      MODEL_SEED_PATH: /workspace/generated/model_seed.json
+    volumes:
+      - huawei_generated:/workspace/generated:ro
+    command:
+      - python
+      - -m
+      - huawei_litellm.seed_models
+    restart: "no"
+
+  maas-ui:
+    image: ghcr.io/j0taaa/litellm-huawei-ui:${IMAGE_TAG:-latest}
+    depends_on:
+      litellm:
+        condition: service_healthy
+    ports:
+      - "${UI_PORT:-3002}:3001"
+    environment:
+      NODE_ENV: production
+      UI_PORT: 3001
+      LITELLM_BASE_URL: http://litellm:4000
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-huawei-maas-local}
+      UI_DATABASE_URL: postgresql://${POSTGRES_USER:-litellm}:${POSTGRES_PASSWORD:-litellm-password-change-me}@db:5432/${POSTGRES_DB:-litellm}
+      UI_SESSION_SECRET: ${UI_SESSION_SECRET:-${LITELLM_SALT_KEY}}
+      UI_SECURE_COOKIES: ${UI_SECURE_COOKIES:-false}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  huawei_generated:
+  litellm_postgres_data:

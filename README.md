@@ -1,21 +1,40 @@
-# Huawei MaaS LiteLLM Gateway
+# Huawei LiteLLM UI
 
-Self-hosted LiteLLM gateway for Huawei Cloud MaaS. It fetches the MaaS model catalog from `https://catalog.hwctools.site/models`, generates LiteLLM model config, stores LiteLLM state in Postgres, and adds a custom callback that computes exact Huawei tiered token costs for models such as `glm-5.1`.
+Self-hosted LiteLLM environment and simpler management UI for Huawei Cloud MaaS. It fetches the MaaS model catalog from `https://catalog.hwctools.site/models`, generates LiteLLM model config, stores LiteLLM state in Postgres, and adds a custom callback that computes exact Huawei tiered token costs for models such as `glm-5.1`.
 
 ## Quick Start
 
+Use the published containers when you only want to run the stack:
+
 ```sh
-cp .env.example .env
-# edit .env and set HUAWEI_MAAS_API_KEY, LITELLM_MASTER_KEY,
-# LITELLM_SALT_KEY, and POSTGRES_PASSWORD
+curl -fsSL https://raw.githubusercontent.com/j0taaa/litellm-huawei/main/scripts/install-release.sh | sh
+cd huawei-litellm-ui
+
+# edit .env and set HUAWEI_MAAS_API_KEY, LITELLM_MASTER_KEY, LITELLM_SALT_KEY, and POSTGRES_PASSWORD
 docker compose up -d
 ```
 
-LiteLLM will listen on `http://localhost:4000` by default. The simple MaaS UI listens on `http://localhost:3002`.
+LiteLLM will listen on `http://localhost:4000` by default. Huawei LiteLLM UI listens on `http://localhost:3002`.
 
 ```sh
 curl -H "Authorization: Bearer $LITELLM_MASTER_KEY" http://localhost:4000/v1/models
 ```
+
+## Published Images
+
+GitHub Actions publishes these images to GHCR on every push to `main`:
+
+- `ghcr.io/j0taaa/litellm-huawei-litellm:latest`
+- `ghcr.io/j0taaa/litellm-huawei-tools:latest`
+- `ghcr.io/j0taaa/litellm-huawei-ui:latest`
+
+The no-clone runtime files are:
+
+- `docker-compose.release.yml`
+- `.env.release.example`
+- `scripts/install-release.sh`
+
+Clone this repository only if you want to develop the project or build images locally.
 
 ## How It Works
 
@@ -23,7 +42,7 @@ curl -H "Authorization: Bearer $LITELLM_MASTER_KEY" http://localhost:4000/v1/mod
 - `db` runs Postgres for LiteLLM keys, teams, budgets, usage, models, and admin state.
 - `litellm` starts from a small custom image layered on `ghcr.io/berriai/litellm-database:main-latest`, adds `asyncpg` for the quota callback, and runs with `STORE_MODEL_IN_DB=True`.
 - `model-seed` waits for LiteLLM health, deletes existing DB-backed Huawei MaaS models, and recreates them in LiteLLM’s DB from the latest catalog seed.
-- `maas-ui` provides a simpler browser UI for LiteLLM login, key management, team management, model management, prompt policies, testing, and usage stats.
+- `maas-ui` provides Huawei LiteLLM UI for LiteLLM login, key management, team management, model management, prompt policies, testing, and usage stats.
 - Each Huawei model routes to the MaaS OpenAI-compatible endpoint with `model: <huawei-model-id>` and `custom_llm_provider: openai`.
 - Static LiteLLM pricing is set from the first price range so standard LiteLLM metadata works.
 - `custom_callbacks.py` reads the saved catalog, logs exact Huawei MaaS cost, and enforces optional Huawei token quotas and access schedules stored on keys and teams.
@@ -68,6 +87,13 @@ The simple UI can create keys that are only usable on selected weekdays and, opt
 Days use ISO weekdays, where `1` is Monday and `7` is Sunday. If `start` and `end` are omitted, the key is available all day on the selected days.
 
 ## Development
+
+For local development from a checkout:
+
+```sh
+cp .env.example .env
+docker compose up -d
+```
 
 Generate config locally:
 
