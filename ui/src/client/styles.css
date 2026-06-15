@@ -76,7 +76,7 @@ textarea { min-height: 86px; resize: vertical; }
   color: #edf5f1;
   padding: 18px;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr auto auto;
   gap: 20px;
 }
 
@@ -105,6 +105,15 @@ nav { display: grid; align-content: start; gap: 8px; }
   color: #fff;
 }
 .nav.active svg, .nav:hover svg { color: #fbbf24; }
+.litellm-external {
+  align-self: end;
+  border: 1px solid rgba(149, 221, 210, 0.32);
+  background: rgba(125, 211, 199, 0.09);
+}
+.litellm-external:hover {
+  box-shadow: inset 3px 0 0 #7dd3c7;
+}
+.litellm-external:hover svg { color: #7dd3c7; }
 .account { display: grid; gap: 6px; font-size: 13px; color: #b7c7c1; }
 .account strong { color: #fff; overflow-wrap: anywhere; }
 .ghost { background: transparent; color: #fff; border: 1px solid #3d5b53; justify-content: flex-start; }

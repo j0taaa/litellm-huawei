@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3, LogOut, MessageSquare, Pencil, Plus, Power, RefreshCcw, Regex, Send, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Activity, BarChart3, CalendarClock, Copy, DollarSign, ExternalLink, KeyRound, Layers3, LogOut, MessageSquare, Pencil, Plus, Power, RefreshCcw, Regex, Send, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
 import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptPolicyRule, SessionUser, StatsBreakdownRow, StatsSummary, TeamRow } from "../shared/types";
 import "./styles.css";
 
@@ -288,6 +288,9 @@ function AppLayout({ session, route, onNavigate, onLogout, children }: { session
             <NavLink key={item.path} active={route === item.path} icon={item.icon} label={item.label} path={item.path} onNavigate={onNavigate} />
           ))}
         </nav>
+        <a className="nav litellm-external" href={liteLLMUiUrl()} target="_blank" rel="noreferrer">
+          <ExternalLink size={18} /><span>LiteLLM UI</span>
+        </a>
         <div className="account">
           <strong>{session.userEmail || session.userId}</strong>
           <span>{session.userRole}</span>
@@ -297,6 +300,11 @@ function AppLayout({ session, route, onNavigate, onLogout, children }: { session
       <main className="content">{children}</main>
     </div>
   );
+}
+
+function liteLLMUiUrl(): string {
+  const host = window.location.hostname.includes(":") ? `[${window.location.hostname}]` : window.location.hostname;
+  return `${window.location.protocol}//${host}:4000/ui/`;
 }
 
 function NavLink({ active, icon, label, path, onNavigate }: { active: boolean; icon: React.ReactNode; label: string; path: RoutePath; onNavigate: (path: RoutePath) => void }) {
