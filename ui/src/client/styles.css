@@ -183,6 +183,19 @@ nav { display: grid; align-content: start; gap: 8px; }
 }
 .bar-row.clickable:hover { background: #f6fbf9; }
 .wide { overflow-x: auto; }
+.table-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+}
 
 .detail-heading {
   display: flex;

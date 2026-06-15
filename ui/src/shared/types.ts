@@ -105,6 +105,7 @@ export type StatsSummary = {
   byModel: StatsBreakdownRow[];
   byKey: StatsBreakdownRow[];
   byTeam: StatsBreakdownRow[];
+  recentTotal?: number;
   recent: Array<Record<string, unknown>>;
 };
 

@@ -9,7 +9,7 @@ import { loadConfig } from "./config.js";
 import { LiteLLMClient } from "./litellm.js";
 import { PromptPolicyStore, assignmentInputSchema, keyIdentifier, policyInputSchema } from "./prompt-policies.js";
 import { signSession, verifyLiteLLMToken, verifySession, type UiSession } from "./session.js";
-import { filterSpendLogsByKey, summarizeStats } from "./stats.js";
+import { filterSpendLogsByKey, filterSpendLogsByTeam, summarizeStats } from "./stats.js";
 
 const config = loadConfig();
 const litellm = new LiteLLMClient(config.litellmBaseUrl);
@@ -270,6 +270,24 @@ app.get("/api/stats/keys/:key", async (request, reply) => {
   ]);
   return summarizeStats({
     spendLogs: filterSpendLogsByKey(arrayFrom(logs, "data", "logs", "spend_logs"), params.key),
+    keys: arrayFrom(keys, "keys", "data"),
+    teams: arrayFrom(teams, "teams", "data"),
+    models: arrayFrom(normalizeModelInfoResponse(models), "data")
+  });
+});
+
+app.get("/api/stats/teams/:teamId", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ teamId: z.string().min(1) }).parse(request.params);
+  const query = new URLSearchParams(request.query as Record<string, string>);
+  const [logs, keys, teams, models] = await Promise.all([
+    litellm.request<unknown>(`/spend/logs?${query.toString()}`, session.litellmKey),
+    litellm.request<unknown>("/key/list?page=1&size=100&return_full_object=true", session.litellmKey),
+    litellm.request<unknown>("/team/list", session.litellmKey),
+    litellm.request<unknown>("/model/info", session.litellmKey)
+  ]);
+  return summarizeStats({
+    spendLogs: filterSpendLogsByTeam(arrayFrom(logs, "data", "logs", "spend_logs"), params.teamId),
     keys: arrayFrom(keys, "keys", "data"),
     teams: arrayFrom(teams, "teams", "data"),
     models: arrayFrom(normalizeModelInfoResponse(models), "data")

@@ -30,6 +30,7 @@ export function summarizeStats(input: {
     byModel: [...byModel.values()].sort((a, b) => b.spend - a.spend),
     byKey: [...byKey.values()].sort((a, b) => b.spend - a.spend),
     byTeam: [...byTeam.values()].sort((a, b) => b.spend - a.spend),
+    recentTotal: input.spendLogs.length,
     recent: input.spendLogs.slice(0, 50).map((log) => ({
       ...log,
       model: displayModelName(stringField(log, "model") || "unknown")
@@ -39,6 +40,10 @@ export function summarizeStats(input: {
 
 export function filterSpendLogsByKey(spendLogs: Array<Record<string, unknown>>, key: string): Array<Record<string, unknown>> {
   return spendLogs.filter((log) => statsKey(log) === key);
+}
+
+export function filterSpendLogsByTeam(spendLogs: Array<Record<string, unknown>>, teamId: string): Array<Record<string, unknown>> {
+  return spendLogs.filter((log) => (stringField(log, "team_id") || "none") === teamId);
 }
 
 function add(map: Map<string, StatsBreakdownRow>, name: string, spend: number): void {

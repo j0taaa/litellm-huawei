@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterSpendLogsByKey, summarizeStats } from "../src/server/stats";
+import { filterSpendLogsByKey, filterSpendLogsByTeam, summarizeStats } from "../src/server/stats";
 
 describe("summarizeStats", () => {
   it("groups spend logs by model, key, and team", () => {
@@ -19,6 +19,7 @@ describe("summarizeStats", () => {
     expect(summary.totals.teams).toBe(1);
     expect(summary.totals.models).toBe(3);
     expect(summary.totals.spend).toBeCloseTo(0.6);
+    expect(summary.recentTotal).toBe(3);
     expect(summary.byModel[0]).toMatchObject({ name: "glm-5.1", requests: 2 });
     expect(summary.recent[0].model).toBe("glm-5.1");
     expect(summary.byKey.find((row) => row.name === "key-a")?.spend).toBeCloseTo(0.3);
@@ -34,5 +35,16 @@ describe("summarizeStats", () => {
     ];
 
     expect(filterSpendLogsByKey(logs, "key-a")).toEqual([logs[0], logs[2]]);
+  });
+
+  it("filters spend logs by team", () => {
+    const logs = [
+      { team_id: "team-a", spend: 0.1 },
+      { team_id: "team-b", spend: 0.2 },
+      { api_key: "key-without-team", spend: 0.3 }
+    ];
+
+    expect(filterSpendLogsByTeam(logs, "team-a")).toEqual([logs[0]]);
+    expect(filterSpendLogsByTeam(logs, "none")).toEqual([logs[2]]);
   });
 });

@@ -452,13 +452,20 @@ test("direct route keeps destination after login", async ({ page }) => {
   await expect(page).toHaveURL(/\/keys$/);
 });
 
-test("opens key stats from stats breakdown", async ({ page }) => {
+test("opens key and team stats from stats breakdown with paginated logs", async ({ page }) => {
+  const recent = Array.from({ length: 12 }, (_, index) => ({
+    startTime: `2026-06-12T18:${String(index).padStart(2, "0")}:00Z`,
+    model: "glm-5.1",
+    api_key: index % 2 ? "key-b" : "key-a",
+    team_id: index % 2 ? "team-b" : "team-a",
+    spend: 0.1
+  }));
   const summary = {
-    totals: { spend: 0.3, requests: 2, keys: 1, teams: 1, models: 1 },
-    byModel: [{ id: "glm-5.1", name: "glm-5.1", spend: 0.3, requests: 2 }],
-    byKey: [{ id: "key-a", name: "key-a", spend: 0.3, requests: 2 }],
-    byTeam: [{ id: "team-a", name: "team-a", spend: 0.3, requests: 2 }],
-    recent: [{ startTime: "2026-06-12T18:00:00Z", model: "glm-5.1", api_key: "key-a", team_id: "team-a", spend: 0.3 }]
+    totals: { spend: 1.2, requests: 12, keys: 2, teams: 2, models: 1 },
+    byModel: [{ id: "glm-5.1", name: "glm-5.1", spend: 1.2, requests: 12 }],
+    byKey: [{ id: "key-a", name: "key-a", spend: 0.6, requests: 6 }, { id: "key-b", name: "key-b", spend: 0.6, requests: 6 }],
+    byTeam: [{ id: "team-a", name: "team-a", spend: 0.6, requests: 6 }, { id: "team-b", name: "team-b", spend: 0.6, requests: 6 }],
+    recent
   };
   await page.route("**/api/stats**", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(summary) });
@@ -470,10 +477,21 @@ test("opens key stats from stats breakdown", async ({ page }) => {
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await expect(page.getByRole("heading", { name: "Stats" })).toBeVisible();
+  await expect(page.getByText("1-10 of 12")).toBeVisible();
+  await expect(page.getByText("Page 1 of 2")).toBeVisible();
+  await page.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByText("11-12 of 12")).toBeVisible();
   await page.getByRole("button", { name: /key-a/ }).click();
   await expect(page).toHaveURL(/\/stats\/keys\/key-a$/);
   await expect(page.getByRole("heading", { name: "Key stats" })).toBeVisible();
   await expect(page.getByText("API key")).toBeVisible();
   await expect(page.locator(".detail-heading code")).toHaveText("key-a");
   await expect(page.getByText("Recent key spend logs")).toBeVisible();
+  await page.getByRole("button", { name: "Back to stats" }).click();
+  await page.getByRole("button", { name: /team-a/ }).click();
+  await expect(page).toHaveURL(/\/stats\/teams\/team-a$/);
+  await expect(page.getByRole("heading", { name: "Team stats" })).toBeVisible();
+  await expect(page.locator(".detail-heading").getByText("Team", { exact: true })).toBeVisible();
+  await expect(page.locator(".detail-heading code")).toHaveText("team-a");
+  await expect(page.getByText("Recent team spend logs")).toBeVisible();
 });

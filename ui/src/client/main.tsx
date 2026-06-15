@@ -4,7 +4,7 @@ import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3
 import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptPolicyRule, SessionUser, StatsBreakdownRow, StatsSummary, TeamRow } from "../shared/types";
 import "./styles.css";
 
-type RoutePath = "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/test" | `/stats/keys/${string}`;
+type RoutePath = "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/test" | `/stats/keys/${string}` | `/stats/teams/${string}`;
 type Tone = "green" | "blue" | "amber" | "violet" | "rose";
 type DurationUnit = "m" | "h" | "d";
 
@@ -319,6 +319,9 @@ function renderRoute(route: RoutePath, navigate: (path: RoutePath) => void): Rea
   if (route.startsWith("/stats/keys/")) {
     return <KeyStatsPage keyId={decodeURIComponent(route.slice("/stats/keys/".length))} onBack={() => navigate("/stats")} />;
   }
+  if (route.startsWith("/stats/teams/")) {
+    return <TeamStatsPage teamId={decodeURIComponent(route.slice("/stats/teams/".length))} onBack={() => navigate("/stats")} />;
+  }
   if (route === "/keys") return <KeysPage />;
   if (route === "/teams") return <TeamsPage />;
   if (route === "/models") return <ModelsPage />;
@@ -350,9 +353,9 @@ function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => void }) {
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="By model" rows={data.byModel} />
             <Breakdown icon={<KeyRound size={16} />} tone="amber" title="By key" rows={data.byKey} onRowClick={(row) => onNavigate(`/stats/keys/${encodeURIComponent(row.id || row.name)}`)} />
-            <Breakdown icon={<Users size={16} />} tone="violet" title="By team" rows={data.byTeam} />
+            <Breakdown icon={<Users size={16} />} tone="violet" title="By team" rows={data.byTeam} onRowClick={(row) => onNavigate(`/stats/teams/${encodeURIComponent(row.id || row.name)}`)} />
           </div>
-          <DataTable icon={<Activity size={16} />} title="Recent spend logs" rows={data.recent} columns={["startTime", "model", "api_key", "team_id", "spend"]} />
+          <PaginatedDataTable icon={<Activity size={16} />} title="Recent spend logs" rows={data.recent} columns={["startTime", "model", "api_key", "team_id", "spend"]} />
         </>
       )}
     </section>
@@ -387,7 +390,42 @@ function KeyStatsPage({ keyId, onBack }: { keyId: string; onBack: () => void }) 
             <Breakdown icon={<Users size={16} />} tone="violet" title="Teams" rows={data.byTeam} />
             <Breakdown icon={<Activity size={16} />} tone="blue" title="Requests" rows={data.byKey} />
           </div>
-          <DataTable icon={<Activity size={16} />} title="Recent key spend logs" rows={data.recent} columns={["startTime", "model", "api_key", "team_id", "spend"]} />
+          <PaginatedDataTable icon={<Activity size={16} />} title="Recent key spend logs" rows={data.recent} columns={["startTime", "model", "api_key", "team_id", "spend"]} />
+        </>
+      )}
+    </section>
+  );
+}
+
+function TeamStatsPage({ teamId, onBack }: { teamId: string; onBack: () => void }) {
+  const { data, loading, reload } = useResource<StatsSummary>(`/api/stats/teams/${encodeURIComponent(teamId)}`);
+  return (
+    <section>
+      <Header
+        icon={<Users size={22} />}
+        title="Team stats"
+        tone="violet"
+        action={<div className="header-actions"><button className="secondary" onClick={onBack}>Back to stats</button><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button></div>}
+      />
+      <div className="detail-heading">
+        <span className="muted">Team</span>
+        <code>{teamId}</code>
+      </div>
+      {loading || !data ? <EmptyState text="Loading team stats" /> : (
+        <>
+          <div className="metrics">
+            <Metric icon={<DollarSign size={18} />} tone="green" label="Spend" value={currency(data.totals.spend)} />
+            <Metric icon={<Activity size={18} />} tone="blue" label="Requests" value={String(data.totals.requests)} />
+            <Metric icon={<Layers3 size={18} />} tone="rose" label="Models" value={String(data.byModel.length)} />
+            <Metric icon={<KeyRound size={18} />} tone="amber" label="Keys" value={String(data.byKey.length)} />
+            <Metric icon={<Users size={18} />} tone="violet" label="Team rows" value={String(data.byTeam.length)} />
+          </div>
+          <div className="grid3">
+            <Breakdown icon={<Layers3 size={16} />} tone="rose" title="Models" rows={data.byModel} />
+            <Breakdown icon={<KeyRound size={16} />} tone="amber" title="Keys" rows={data.byKey} />
+            <Breakdown icon={<Activity size={16} />} tone="blue" title="Requests" rows={data.byTeam} />
+          </div>
+          <PaginatedDataTable icon={<Activity size={16} />} title="Recent team spend logs" rows={data.recent} columns={["startTime", "model", "api_key", "team_id", "spend"]} />
         </>
       )}
     </section>
@@ -1390,6 +1428,36 @@ function DataTable({ icon, title, rows, columns }: { icon: React.ReactNode; titl
   return <div className="panel wide"><PanelTitle icon={icon} title={title} /><table><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index}>{columns.map((column) => <td key={column}>{formatCell(row[column])}</td>)}</tr>)}</tbody></table></div>;
 }
 
+function PaginatedDataTable({ icon, title, rows, columns, pageSize = 10 }: { icon: React.ReactNode; title: string; rows: Array<Record<string, unknown>>; columns: string[]; pageSize?: number }) {
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const start = currentPage * pageSize;
+  const visibleRows = rows.slice(start, start + pageSize);
+
+  useEffect(() => {
+    setPage(0);
+  }, [rows]);
+
+  return (
+    <div className="panel wide">
+      <div className="table-panel-head">
+        <PanelTitle icon={icon} title={title} />
+        <span className="muted">{rows.length ? `${start + 1}-${Math.min(start + pageSize, rows.length)} of ${rows.length}` : "0 logs"}</span>
+      </div>
+      <table>
+        <thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
+        <tbody>{visibleRows.map((row, index) => <tr key={start + index}>{columns.map((column) => <td key={column}>{formatCell(row[column])}</td>)}</tr>)}</tbody>
+      </table>
+      <div className="pagination">
+        <button className="secondary" onClick={() => setPage(Math.max(0, currentPage - 1))} disabled={currentPage === 0}>Previous</button>
+        <span className="muted">Page {currentPage + 1} of {pageCount}</span>
+        <button className="secondary" onClick={() => setPage(Math.min(pageCount - 1, currentPage + 1))} disabled={currentPage >= pageCount - 1}>Next</button>
+      </div>
+    </div>
+  );
+}
+
 function PanelTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
   return <h2 className="panel-title"><span>{icon}</span>{title}</h2>;
 }
@@ -1430,6 +1498,7 @@ function useRoute() {
 
 function normalizeRoute(pathname: string): RoutePath {
   if (pathname.startsWith("/stats/keys/") && pathname.length > "/stats/keys/".length) return pathname as RoutePath;
+  if (pathname.startsWith("/stats/teams/") && pathname.length > "/stats/teams/".length) return pathname as RoutePath;
   return routes.some((item) => item.path === pathname) ? pathname as RoutePath : "/stats";
 }
 
