@@ -550,13 +550,13 @@ function KeysPage() {
                 </div>
               </fieldset>
               <fieldset className="config-section">
-                <span className="field-label">Token budget</span>
-                <label className="toggle-row"><input type="checkbox" checked={form.tokenBudget} onChange={(e) => setForm({ ...form, tokenBudget: e.target.checked })} /> <span>Set token budget</span></label>
+                <span className="field-label">Token quota</span>
+                <label className="toggle-row"><input type="checkbox" checked={form.tokenBudget} onChange={(e) => setForm({ ...form, tokenBudget: e.target.checked })} /> <span>Set token quota</span></label>
                 {form.tokenBudget ? (
                   <>
                     <div className="config-grid">
-                      <label>Total token budget<input type="number" min="1" step="1" placeholder="Total tokens" value={form.tokenBudgetTokens} onChange={(e) => setForm({ ...form, tokenBudgetTokens: e.target.value })} required={form.tokenBudget} /></label>
-                      <label className="toggle-row"><input type="checkbox" checked={form.tokenBudgetReset} onChange={(e) => setForm({ ...form, tokenBudgetReset: e.target.checked })} /> <span>Reset token budget</span></label>
+                      <label>Total token quota<input type="number" min="1" step="1" placeholder="Total tokens" value={form.tokenBudgetTokens} onChange={(e) => setForm({ ...form, tokenBudgetTokens: e.target.value })} required={form.tokenBudget} /></label>
+                      <label className="toggle-row"><input type="checkbox" checked={form.tokenBudgetReset} onChange={(e) => setForm({ ...form, tokenBudgetReset: e.target.checked })} /> <span>Reset token quota</span></label>
                     </div>
                     {form.tokenBudgetReset ? (
                       <div className="duration-controls">
@@ -578,11 +578,11 @@ function KeysPage() {
                         </label>
                       </div>
                     ) : (
-                      <p className="field-note compact">Token budget does not reset.</p>
+                      <p className="field-note compact">Token quota does not reset.</p>
                     )}
                   </>
                 ) : (
-                  <p className="field-note compact">No total token budget is enforced.</p>
+                  <p className="field-note compact">No total token quota is enforced.</p>
                 )}
               </fieldset>
               <fieldset className="config-section">

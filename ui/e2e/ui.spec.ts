@@ -120,12 +120,12 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Max TPS")).toBeVisible();
   await expect(page.getByLabel("Max TPM")).toBeVisible();
   await expect(page.getByLabel("Max parallel")).toBeVisible();
-  await expect(page.getByLabel("Set token budget")).not.toBeChecked();
-  await expect(page.getByText("No total token budget is enforced.")).toBeVisible();
-  await page.getByLabel("Set token budget").check();
-  await page.getByLabel("Total token budget").fill("10000");
-  await expect(page.getByLabel("Reset token budget")).not.toBeChecked();
-  await page.getByLabel("Reset token budget").check();
+  await expect(page.getByLabel("Set token quota")).not.toBeChecked();
+  await expect(page.getByText("No total token quota is enforced.")).toBeVisible();
+  await page.getByLabel("Set token quota").check();
+  await page.getByLabel("Total token quota").fill("10000");
+  await expect(page.getByLabel("Reset token quota")).not.toBeChecked();
+  await page.getByLabel("Reset token quota").check();
   await expect(page.getByLabel("Token reset every")).toHaveValue("30");
   await expect(page.getByLabel("Token reset unit")).toHaveValue("d");
   await expect(page.getByLabel("Restrict access by schedule")).not.toBeChecked();
