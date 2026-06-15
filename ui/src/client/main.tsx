@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3, LogOut, Pencil, Plus, RefreshCcw, Regex, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Activity, BarChart3, CalendarClock, Copy, DollarSign, KeyRound, Layers3, LogOut, MessageSquare, Pencil, Plus, RefreshCcw, Regex, Send, ShieldCheck, Sparkles, Trash2, Users, X } from "lucide-react";
 import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptPolicyRule, SessionUser, StatsBreakdownRow, StatsSummary, TeamRow } from "../shared/types";
 import "./styles.css";
 
-type RoutePath = "/stats" | "/keys" | "/teams" | "/models" | "/policies" | `/stats/keys/${string}`;
+type RoutePath = "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/test" | `/stats/keys/${string}`;
 type Tone = "green" | "blue" | "amber" | "violet" | "rose";
 type DurationUnit = "m" | "h" | "d";
 
@@ -108,6 +108,11 @@ type PolicyFormState = {
   teamAssignments: string[];
 };
 
+type TestChatMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+};
+
 const defaultPolicyRule: PromptPolicyRule = {
   name: "New rule",
   enabled: true,
@@ -140,12 +145,13 @@ const defaultModelForm: ModelFormState = {
   output_cost_per_million: ""
 };
 
-const routes: Array<{ path: "/stats" | "/keys" | "/teams" | "/models" | "/policies"; label: string; icon: React.ReactNode }> = [
+const routes: Array<{ path: "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/test"; label: string; icon: React.ReactNode }> = [
   { path: "/stats", label: "Stats", icon: <BarChart3 size={18} /> },
   { path: "/keys", label: "Keys", icon: <KeyRound size={18} /> },
   { path: "/teams", label: "Teams", icon: <Users size={18} /> },
   { path: "/models", label: "Models", icon: <Layers3 size={18} /> },
-  { path: "/policies", label: "Policies", icon: <Regex size={18} /> }
+  { path: "/policies", label: "Policies", icon: <Regex size={18} /> },
+  { path: "/test", label: "Test", icon: <MessageSquare size={18} /> }
 ];
 
 function App() {
@@ -265,12 +271,13 @@ function renderRoute(route: RoutePath, navigate: (path: RoutePath) => void): Rea
   if (route === "/teams") return <TeamsPage />;
   if (route === "/models") return <ModelsPage />;
   if (route === "/policies") return <PoliciesPage />;
+  if (route === "/test") return <TestPage />;
   return <StatsPage onNavigate={navigate} />;
 }
 
-function activeNavRoute(route: RoutePath): "/stats" | "/keys" | "/teams" | "/models" | "/policies" {
+function activeNavRoute(route: RoutePath): "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/test" {
   if (route.startsWith("/stats")) return "/stats";
-  if (route === "/keys" || route === "/teams" || route === "/models" || route === "/policies") return route;
+  if (route === "/keys" || route === "/teams" || route === "/models" || route === "/policies" || route === "/test") return route;
   return "/stats";
 }
 
@@ -658,6 +665,108 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
         {children}
       </div>
     </div>
+  );
+}
+
+function TestPage() {
+  const keysResource = useResource<{ keys?: ApiKeyListRow[]; data?: ApiKeyListRow[] }>("/api/keys?page=1&size=100");
+  const modelsResource = useResource<{ data?: ModelInfo[] }>("/api/models");
+  const keys = keysResource.data?.keys || keysResource.data?.data || [];
+  const models = modelsResource.data?.data || [];
+  const [selectedKey, setSelectedKey] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("");
+  const [maxTokens, setMaxTokens] = useState("512");
+  const [prompt, setPrompt] = useState("");
+  const [messages, setMessages] = useState<TestChatMessage[]>([]);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!model && models[0]?.model_name) setModel(models[0].model_name);
+  }, [model, models]);
+
+  useEffect(() => {
+    if (!selectedKey && keys.length) {
+      const id = keyIdentifier(keys[0]);
+      setSelectedKey(id);
+      setApiKey(id);
+    }
+  }, [keys, selectedKey]);
+
+  function selectKey(value: string) {
+    setSelectedKey(value);
+    setApiKey(value);
+  }
+
+  async function sendPrompt(event: React.FormEvent) {
+    event.preventDefault();
+    const content = prompt.trim();
+    if (!content || !apiKey || !model) return;
+    const nextMessages: TestChatMessage[] = [...messages, { role: "user", content }];
+    setMessages(nextMessages);
+    setPrompt("");
+    setSending(true);
+    setError("");
+    try {
+      const result = await api<Record<string, unknown>>("/api/test/chat", {
+        method: "POST",
+        body: {
+          api_key: apiKey,
+          model,
+          messages: nextMessages.map(({ role, content }) => ({ role, content })),
+          max_tokens: Number(maxTokens) || 512
+        }
+      });
+      setMessages([...nextMessages, { role: "assistant", content: chatResponseText(result) }]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Request failed";
+      setError(message);
+      setMessages([...nextMessages, { role: "assistant", content: `Error: ${message}` }]);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <section>
+      <Header icon={<MessageSquare size={22} />} title="Test" tone="green" />
+      <div className="test-shell">
+        <div className="test-controls">
+          <label>API key
+            <select aria-label="API key" value={selectedKey} onChange={(event) => selectKey(event.target.value)} disabled={keysResource.loading}>
+              <option value="">{keysResource.loading ? "Loading keys" : "Select key"}</option>
+              {keys.map((rawKey, index) => {
+                const row = normalizeKeyRow(rawKey);
+                const id = keyIdentifier(rawKey);
+                return id ? <option key={id || index} value={id}>{row.key_alias || row.key_name || id}</option> : null;
+              })}
+            </select>
+          </label>
+          <label>Bearer API key<input aria-label="Bearer API key" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Paste key if only a hash is listed" /></label>
+          <label>Model
+            <select aria-label="Model" value={model} onChange={(event) => setModel(event.target.value)} disabled={modelsResource.loading}>
+              <option value="">{modelsResource.loading ? "Loading models" : "Select model"}</option>
+              {models.map((item) => <option key={item.model_name} value={item.model_name}>{item.model_name}</option>)}
+            </select>
+          </label>
+          <label>Max tokens<input type="number" min="1" max="8192" step="1" value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} /></label>
+        </div>
+        <div className="chat-window" aria-label="Chat transcript">
+          {messages.length ? messages.map((message, index) => (
+            <div className={`chat-message ${message.role}`} key={index}>
+              <span>{message.role}</span>
+              <p>{message.content}</p>
+            </div>
+          )) : <EmptyState text="No test messages yet" />}
+        </div>
+        {error ? <div className="error">{error}</div> : null}
+        <form className="chat-composer" onSubmit={sendPrompt}>
+          <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Send a test prompt" />
+          <button className="primary" disabled={sending || !prompt.trim() || !apiKey || !model}><Send size={16} /> {sending ? "Sending" : "Send"}</button>
+        </form>
+      </div>
+    </section>
   );
 }
 
@@ -1138,6 +1247,15 @@ function policyPayload(form: PolicyFormState): Record<string, unknown> {
 
 function toggleValue<T>(values: T[], value: T): T[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+}
+
+function chatResponseText(result: Record<string, unknown>): string {
+  const choices = Array.isArray(result.choices) ? result.choices : [];
+  const first = choices[0] as Record<string, unknown> | undefined;
+  const message = first?.message && typeof first.message === "object" ? first.message as Record<string, unknown> : {};
+  if (typeof message.content === "string") return message.content;
+  if (typeof first?.text === "string") return first.text;
+  return JSON.stringify(result, null, 2);
 }
 
 function keyPayload(form: KeyFormState, mode: "create" | "edit" | "clone"): Record<string, unknown> {

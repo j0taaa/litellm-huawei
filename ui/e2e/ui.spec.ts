@@ -305,6 +305,30 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     ]
   });
   await expect(page.getByRole("cell", { name: "PII safety" })).toBeVisible();
+
+  let testChatPayload: Record<string, any> | undefined;
+  await page.route("**/api/test/chat", async (route) => {
+    testChatPayload = route.request().postDataJSON();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { role: "assistant", content: "Test response from model" } }] })
+    });
+  });
+  await page.getByRole("link", { name: "Test" }).click();
+  await expect(page.getByRole("heading", { name: "Test" })).toBeVisible();
+  await expect(page).toHaveURL(/\/test$/);
+  await expect(page.getByLabel("API key", { exact: true })).toHaveValue("hash-delete-test");
+  await expect(page.getByLabel("Model")).toHaveValue("glm-test");
+  await page.getByPlaceholder("Send a test prompt").fill("Hello from the test tab");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText("Test response from model")).toBeVisible();
+  expect(testChatPayload).toMatchObject({
+    api_key: "hash-delete-test",
+    model: "glm-test",
+    messages: [{ role: "user", content: "Hello from the test tab" }],
+    max_tokens: 512
+  });
 });
 
 test("direct route keeps destination after login", async ({ page }) => {

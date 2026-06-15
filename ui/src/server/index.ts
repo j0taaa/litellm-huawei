@@ -189,6 +189,27 @@ app.put("/api/prompt-policies/:policyId/assignments", async (request, reply) => 
   return promptPolicies.setAssignments(params.policyId, body.assignments, session.litellmKey);
 });
 
+app.post("/api/test/chat", async (request, reply) => {
+  await requireSession(request, reply);
+  const body = z.object({
+    api_key: z.string().min(1),
+    model: z.string().min(1),
+    messages: z.array(z.object({
+      role: z.enum(["system", "user", "assistant"]),
+      content: z.string()
+    })).min(1),
+    max_tokens: z.number().int().min(1).max(8192).optional()
+  }).parse(request.body || {});
+  return litellm.request("/chat/completions", body.api_key, {
+    method: "POST",
+    body: JSON.stringify({
+      model: body.model,
+      messages: body.messages,
+      max_tokens: body.max_tokens || 512
+    })
+  });
+});
+
 app.get("/api/stats", async (request, reply) => {
   const session = await requireSession(request, reply);
   const query = new URLSearchParams(request.query as Record<string, string>);
