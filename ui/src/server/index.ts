@@ -246,7 +246,7 @@ app.get("/api/stats", async (request, reply) => {
   const query = new URLSearchParams(request.query as Record<string, string>);
   const [logs, keys, teams, models] = await Promise.all([
     litellm.request<unknown>(`/spend/logs?${query.toString()}`, session.litellmKey),
-    litellm.request<unknown>("/key/list?page=1&size=100", session.litellmKey),
+    litellm.request<unknown>("/key/list?page=1&size=100&return_full_object=true", session.litellmKey),
     litellm.request<unknown>("/team/list", session.litellmKey),
     litellm.request<unknown>("/model/info", session.litellmKey)
   ]);

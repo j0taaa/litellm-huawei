@@ -9,7 +9,7 @@ describe("summarizeStats", () => {
         { model: "glm-5.1", api_key: "key-a", team_id: "team-b", response_cost: 0.2 },
         { model: "deepseek-v4-flash", api_key: "key-b", team_id: "team-a", spend: 0.3 }
       ],
-      keys: [{}, {}],
+      keys: [{ token: "key-a", key_alias: "Production app" }, { token: "key-b", key_alias: "Batch jobs" }],
       teams: [{}],
       models: [{}, {}, {}]
     });
@@ -22,8 +22,9 @@ describe("summarizeStats", () => {
     expect(summary.recentTotal).toBe(3);
     expect(summary.byModel[0]).toMatchObject({ name: "glm-5.1", requests: 2 });
     expect(summary.recent[0].model).toBe("glm-5.1");
-    expect(summary.byKey.find((row) => row.name === "key-a")?.spend).toBeCloseTo(0.3);
-    expect(summary.byKey.find((row) => row.name === "key-a")?.id).toBe("key-a");
+    expect(summary.byKey.find((row) => row.name === "Production app")?.spend).toBeCloseTo(0.3);
+    expect(summary.byKey.find((row) => row.name === "Production app")?.id).toBe("key-a");
+    expect(summary.recent[0].api_key).toBe("Production app");
     expect(summary.byTeam.find((row) => row.name === "team-a")?.requests).toBe(2);
   });
 
