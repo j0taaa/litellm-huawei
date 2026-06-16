@@ -71,6 +71,23 @@ prompt_secret() {
   fi
 }
 
+prompt_required_secret() {
+  prompt_label="$1"
+
+  while true; do
+    value="$(prompt_secret "$prompt_label")"
+    if [ -n "$value" ]; then
+      printf '%s' "$value"
+      return
+    fi
+    if ! is_interactive; then
+      printf '%s' "$value"
+      return
+    fi
+    printf '%s is required.\n' "$prompt_label" >/dev/tty
+  done
+}
+
 require_value() {
   name="$1"
   value="$2"
@@ -99,7 +116,7 @@ write_env_file() {
   image_tag="${IMAGE_TAG:-}"
 
   if [ -z "$maas_key" ]; then
-    maas_key="$(prompt_secret "Huawei MaaS API key")"
+    maas_key="$(prompt_required_secret "Huawei MaaS API key")"
   fi
   require_value "HUAWEI_MAAS_API_KEY" "$maas_key" "HUAWEI_MAAS_API_KEY is required. Re-run in a terminal or set it before running the installer."
 
@@ -117,6 +134,12 @@ write_env_file() {
 
   host_port="$(prompt "LiteLLM API host port" "$host_port")"
   ui_port="$(prompt "Huawei LiteLLM UI host port" "$ui_port")"
+  catalog_url="$(prompt "Huawei MaaS catalog URL" "$catalog_url")"
+  litellm_log="$(prompt "LiteLLM log level" "$litellm_log")"
+  postgres_db="$(prompt "Postgres database name" "$postgres_db")"
+  postgres_user="$(prompt "Postgres username" "$postgres_user")"
+  ui_secure_cookies="$(prompt "Use secure UI cookies" "$ui_secure_cookies")"
+  image_tag="$(prompt "Container image tag" "${image_tag:-latest}")"
 
   cat > .env <<EOF
 HUAWEI_MAAS_API_KEY=$maas_key
@@ -135,12 +158,6 @@ EOF
 
   if [ -n "$image_tag" ]; then
     printf '\nIMAGE_TAG=%s\n' "$image_tag" >> .env
-  else
-    cat >> .env <<'EOF'
-
-# Pin a published image tag if needed. Defaults to latest.
-# IMAGE_TAG=latest
-EOF
   fi
 
   ENV_HOST_PORT="$host_port"

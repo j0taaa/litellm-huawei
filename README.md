@@ -13,7 +13,7 @@ cd huawei-litellm-ui
 docker compose up -d
 ```
 
-The installer asks for the Huawei MaaS API key and creates `.env` for you. It generates secure defaults for the LiteLLM master key, LiteLLM salt key, and Postgres password unless you provide them.
+The installer asks for the Huawei MaaS API key and creates `.env` for you. It generates secure defaults for the LiteLLM master key, LiteLLM salt key, and Postgres password unless you provide them. For prompts with a value shown in brackets, press Enter to accept the default.
 
 LiteLLM will listen on `http://localhost:4000` by default. Huawei LiteLLM UI listens on `http://localhost:3002`.
 
