@@ -20,6 +20,20 @@ def test_tiered_cost_crosses_32k_boundary():
     assert model_cost_usd(model, 33000, 32005) == input_cost + output_cost
 
 
+def test_tiered_cost_uses_lower_price_through_token_32000():
+    model = CATALOG["models"][1]
+    input_cost = 32000 * 0.809 / 1_000_000
+    output_cost = 32000 * 3.235 / 1_000_000
+    assert model_cost_usd(model, 32000, 32000) == pytest.approx(input_cost + output_cost)
+
+
+def test_tiered_cost_uses_higher_price_starting_at_token_32001():
+    model = CATALOG["models"][1]
+    input_cost = (32000 * 0.809 / 1_000_000) + (1 * 1.078 / 1_000_000)
+    output_cost = (32000 * 3.235 / 1_000_000) + (1 * 3.774 / 1_000_000)
+    assert model_cost_usd(model, 32001, 32001) == pytest.approx(input_cost + output_cost)
+
+
 def test_range_cost_extends_last_range_for_unexpected_large_usage():
     ranges = [{"start": 0, "end": 9, "tokenPriceUsdPerMillion": 2.0}]
     assert range_cost_usd(12, ranges) == pytest.approx(12 * 2.0 / 1_000_000)

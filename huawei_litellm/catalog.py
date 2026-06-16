@@ -73,7 +73,7 @@ def _validate_ranges(ranges: Any, label: str) -> None:
     if not isinstance(ranges, list) or not ranges:
         raise ValueError(f"{label} must include at least one price range")
 
-    previous_end = -1
+    expected_start = 0
     for index, price_range in enumerate(ranges):
         if not isinstance(price_range, dict):
             raise ValueError(f"{label}[{index}] must be an object")
@@ -84,11 +84,13 @@ def _validate_ranges(ranges: Any, label: str) -> None:
             raise ValueError(f"{label}[{index}].start must be a non-negative integer")
         if not isinstance(end, int) or end < start:
             raise ValueError(f"{label}[{index}].end must be an integer >= start")
-        if start <= previous_end:
+        if start < expected_start:
             raise ValueError(f"{label}[{index}] overlaps the previous range")
+        if start > expected_start:
+            raise ValueError(f"{label}[{index}] leaves a gap after the previous range")
         if not isinstance(price, (int, float)) or price <= 0:
             raise ValueError(f"{label}[{index}].tokenPriceUsdPerMillion must be positive")
-        previous_end = end
+        expected_start = end + 1
 
 
 def _require_dict(value: dict[str, Any], key: str, label: str) -> dict[str, Any]:
@@ -103,4 +105,3 @@ def _require_str(value: dict[str, Any], key: str, label: str) -> str:
     if not isinstance(result, str) or not result:
         raise ValueError(f"{label}.{key} must be a non-empty string")
     return result
-

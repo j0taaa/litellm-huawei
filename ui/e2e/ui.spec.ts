@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+function expectedLiteLLMUiUrl(pageUrl: string): string {
+  const url = new URL(pageUrl);
+  return `${url.protocol}//${url.hostname}:4000/ui/`;
+}
+
 test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.goto("/stats");
   await expect(page.getByRole("heading", { name: "LiteLLM Access" })).toBeVisible();
@@ -11,7 +16,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page).toHaveURL(/\/stats$/);
   await expect(page.locator(".metric").filter({ hasText: "Models" })).toBeVisible();
   const litellmUi = page.getByRole("link", { name: "LiteLLM UI" });
-  await expect(litellmUi).toHaveAttribute("href", "http://127.0.0.1:4000/ui/");
+  await expect(litellmUi).toHaveAttribute("href", expectedLiteLLMUiUrl(page.url()));
   await expect(litellmUi).toHaveAttribute("target", "_blank");
 
   let createPayload: Record<string, any> | undefined;

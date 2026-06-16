@@ -43,3 +43,25 @@ def test_validate_catalog_rejects_overlapping_ranges():
         assert "overlaps" in str(exc)
     else:
         raise AssertionError("expected validation failure")
+
+
+def test_validate_catalog_rejects_range_that_does_not_start_at_zero():
+    catalog = json.loads(json.dumps(CATALOG))
+    catalog["models"][0]["pricing"]["input"][0]["start"] = 1
+    try:
+        validate_catalog(catalog)
+    except ValueError as exc:
+        assert "leaves a gap" in str(exc)
+    else:
+        raise AssertionError("expected validation failure")
+
+
+def test_validate_catalog_rejects_gaps_between_ranges():
+    catalog = json.loads(json.dumps(CATALOG))
+    catalog["models"][1]["pricing"]["input"][1]["start"] = 32001
+    try:
+        validate_catalog(catalog)
+    except ValueError as exc:
+        assert "leaves a gap" in str(exc)
+    else:
+        raise AssertionError("expected validation failure")
