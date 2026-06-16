@@ -233,6 +233,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   let modelCreatePayload: Record<string, any> | undefined;
   let modelUpdatePayload: Record<string, any> | undefined;
   let modelDeleteUrl = "";
+  let modelSyncCalled = false;
   await page.route("**/api/teams**", async (route) => {
     const method = route.request().method();
     if (method === "GET") {
@@ -276,6 +277,11 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   });
   await page.route("**/api/models**", async (route) => {
     const method = route.request().method();
+    if (route.request().url().endsWith("/api/models/sync")) {
+      modelSyncCalled = true;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ models: 1, created: 1, deleted: 1 }) });
+      return;
+    }
     if (method === "GET") {
       await route.fulfill({
         status: 200,
@@ -369,6 +375,9 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Models" })).toBeVisible();
   await expect(page).toHaveURL(/\/models$/);
   await expect(page.getByRole("cell", { name: "glm-test", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Sync catalog" }).click();
+  await expect(page.getByText("Synced 1 Huawei MaaS models from the catalog.")).toBeVisible();
+  expect(modelSyncCalled).toBe(true);
   await page.getByRole("button", { name: "Add model" }).click();
   await page.getByLabel("Model name").fill("new-model");
   await page.getByLabel("Upstream model").fill("new-upstream");

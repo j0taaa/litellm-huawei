@@ -67,6 +67,7 @@ input:not([type="checkbox"]), select, textarea {
 textarea { min-height: 86px; resize: vertical; }
 
 .error { color: #a32727; background: #fff0f0; border: 1px solid #f2c4c4; padding: 10px; border-radius: 6px; }
+.notice { color: #176342; background: #ecfdf4; border: 1px solid #b8ebce; padding: 10px; border-radius: 6px; }
 
 .app { min-height: 100vh; display: grid; grid-template-columns: 248px 1fr; }
 .sidebar {

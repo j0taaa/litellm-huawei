@@ -111,6 +111,10 @@ services:
       UI_DATABASE_URL: postgresql://${POSTGRES_USER:-litellm}:${POSTGRES_PASSWORD:-litellm-password-change-me}@db:5432/${POSTGRES_DB:-litellm}
       UI_SESSION_SECRET: ${UI_SESSION_SECRET:-${LITELLM_SALT_KEY:-sk-huawei-maas-salt-change-me}}
       UI_SECURE_COOKIES: ${UI_SECURE_COOKIES:-false}
+      CATALOG_URL: ${CATALOG_URL:-https://catalog.hwctools.site/models}
+      HUAWEI_GENERATED_DIR: /app/generated
+    volumes:
+      - ./generated:/app/generated
     healthcheck:
       test:
         - CMD

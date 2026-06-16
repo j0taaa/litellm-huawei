@@ -8,6 +8,8 @@ export type ServerConfig = {
   sessionSecret: string;
   secureCookies: boolean;
   nodeEnv: string;
+  catalogUrl: string;
+  generatedDir: string;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -25,6 +27,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     databaseUrl: env.UI_DATABASE_URL || env.DATABASE_URL || "",
     sessionSecret: crypto.createHash("sha256").update(sessionSecret).digest("hex"),
     secureCookies: env.UI_SECURE_COOKIES === "true",
-    nodeEnv: env.NODE_ENV || "development"
+    nodeEnv: env.NODE_ENV || "development",
+    catalogUrl: env.CATALOG_URL || "https://catalog.hwctools.site/models",
+    generatedDir: env.HUAWEI_GENERATED_DIR || "/app/generated"
   };
 }

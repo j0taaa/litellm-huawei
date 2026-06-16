@@ -7,6 +7,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { loadConfig } from "./config.js";
 import { LiteLLMClient } from "./litellm.js";
+import { syncHuaweiModels } from "./model-sync.js";
 import { PromptPolicyStore, assignmentInputSchema, keyIdentifier, policyInputSchema } from "./prompt-policies.js";
 import { signSession, verifyLiteLLMToken, verifySession, type UiSession } from "./session.js";
 import { filterSpendLogsByKey, filterSpendLogsByTeam, spendLogsToCsv, summarizeStats } from "./stats.js";
@@ -55,6 +56,16 @@ app.post("/api/models", async (request, reply) => {
   return litellm.request("/model/new", session.litellmKey, {
     method: "POST",
     body: JSON.stringify(request.body || {})
+  });
+});
+
+app.post("/api/models/sync", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  return syncHuaweiModels({
+    catalogUrl: config.catalogUrl,
+    generatedDir: config.generatedDir,
+    litellm,
+    token: session.litellmKey
   });
 });
 

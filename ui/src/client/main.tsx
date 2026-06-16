@@ -1112,6 +1112,9 @@ function ModelsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<ModelInfo | null>(null);
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [syncError, setSyncError] = useState(false);
   const [form, setForm] = useState<ModelFormState>(defaultModelForm);
   const models = data?.data || [];
 
@@ -1182,14 +1185,31 @@ function ModelsPage() {
     reload();
   }
 
+  async function syncCatalog() {
+    setSyncing(true);
+    setSyncMessage("");
+    setSyncError(false);
+    try {
+      const result = await api<{ models: number; created: number }>("/api/models/sync", { method: "POST" });
+      setSyncMessage(`Synced ${result.created || result.models} Huawei MaaS models from the catalog.`);
+      reload();
+    } catch (error) {
+      setSyncMessage(error instanceof Error ? error.message : "Catalog sync failed");
+      setSyncError(true);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <section>
       <Header
         icon={<Layers3 size={22} />}
         title="Models"
         tone="rose"
-        action={<div className="header-actions"><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button><button className="primary" onClick={openCreateModel}><Plus size={16} /> Add model</button></div>}
+        action={<div className="header-actions"><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button><button className="secondary" onClick={syncCatalog} disabled={syncing}><RefreshCcw size={16} /> {syncing ? "Syncing" : "Sync catalog"}</button><button className="primary" onClick={openCreateModel}><Plus size={16} /> Add model</button></div>}
       />
+      {syncMessage ? <div className={syncError ? "error" : "notice"}>{syncMessage}</div> : null}
       {modalOpen ? (
         <Modal title={editingModel ? "Edit model" : "Add model"} onClose={closeModelModal}>
           <form className="modal-form" onSubmit={saveModel}>
