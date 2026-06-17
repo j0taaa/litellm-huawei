@@ -39,7 +39,10 @@ const catalog = {
 };
 
 describe("model catalog sync", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
 
   it("creates LiteLLM model payloads with Huawei pricing metadata", () => {
     const entries = modelEntries(catalog);
@@ -78,6 +81,7 @@ describe("model catalog sync", () => {
   });
 
   it("writes generated catalog files and reseeds Huawei MaaS models", async () => {
+    vi.stubEnv("HUAWEI_MAAS_API_KEY", "resolved-maas-key");
     const dir = await mkdtemp(path.join(os.tmpdir(), "huawei-sync-"));
     const calls: Array<{ path: string; body?: any }> = [];
     const litellm = {
@@ -106,11 +110,36 @@ describe("model catalog sync", () => {
       });
       await expect(readFile(path.join(generatedDir, "huawei_catalog.json"), "utf-8")).resolves.toContain("\"glm-5.1\"");
       await expect(readFile(path.join(generatedDir, "model_seed.json"), "utf-8")).resolves.toContain("\"deepseek-v4-flash\"");
+      await expect(readFile(path.join(generatedDir, "model_seed.json"), "utf-8")).resolves.toContain("os.environ/HUAWEI_MAAS_API_KEY");
       expect(calls.filter((call) => call.path === "/model/new").map((call) => call.body.model_info.id)).toEqual([
         "huawei-maas-deepseek-v4-flash",
         "huawei-maas-glm-5-1"
       ]);
+      expect(calls.filter((call) => call.path === "/model/new").map((call) => call.body.litellm_params.api_key)).toEqual([
+        "resolved-maas-key",
+        "resolved-maas-key"
+      ]);
       expect(calls.some((call) => call.path === "/model/delete" && call.body.id === "huawei-maas-old")).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("requires the Huawei provider key when syncing DB-backed models", async () => {
+    vi.stubEnv("HUAWEI_MAAS_API_KEY", "");
+    const dir = await mkdtemp(path.join(os.tmpdir(), "huawei-sync-missing-key-"));
+    const litellm = {
+      request: vi.fn(async (requestPath: string) => {
+        if (requestPath === "/model/info") return { data: [] };
+        return { ok: true };
+      })
+    };
+
+    try {
+      const catalogPath = path.join(dir, "source.json");
+      await writeFile(catalogPath, JSON.stringify(catalog));
+      await expect(syncHuaweiModels({ catalogUrl: catalogPath, generatedDir: path.join(dir, "generated"), litellm: litellm as any, token: "sk-test" }))
+        .rejects.toThrow("HUAWEI_MAAS_API_KEY is required");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

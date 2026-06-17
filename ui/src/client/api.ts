@@ -19,7 +19,7 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${response.status})`);
+    throw new Error(body.message || body.error || `Request failed (${response.status})`);
   }
   return response.json() as Promise<T>;
 }

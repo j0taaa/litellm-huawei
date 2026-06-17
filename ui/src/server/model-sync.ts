@@ -91,7 +91,7 @@ export async function syncHuaweiModels(options: {
     }
     await options.litellm.request("/model/new", options.token, {
       method: "POST",
-      body: JSON.stringify(payload)
+      body: JSON.stringify(resolveEnvRefsForLiteLLM(payload))
     });
     created += 1;
   }
@@ -217,6 +217,20 @@ function modelId(model: Record<string, unknown>): string | null {
 
 function huaweiModelId(modelName: string): string {
   return `huawei-maas-${modelName.replaceAll(".", "-")}`;
+}
+
+function resolveEnvRefsForLiteLLM<T extends { litellm_params?: Record<string, unknown> }>(payload: T): T {
+  const cloned = structuredClone(payload);
+  const litellmParams = cloned.litellm_params;
+  if (!litellmParams) return cloned;
+  const apiKey = litellmParams.api_key;
+  if (typeof apiKey === "string" && apiKey.startsWith("os.environ/")) {
+    const envName = apiKey.split("/", 2)[1];
+    const value = process.env[envName];
+    if (!value) throw new Error(`${envName} is required to sync DB-backed LiteLLM models`);
+    litellmParams.api_key = value;
+  }
+  return cloned;
 }
 
 function objectField(value: Record<string, unknown>, key: string): Record<string, unknown> {

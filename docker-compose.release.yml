@@ -84,6 +84,7 @@ services:
       LITELLM_BASE_URL: http://litellm:4000
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-huawei-maas-local}
       MODEL_SEED_PATH: /workspace/generated/model_seed.json
+      HUAWEI_MAAS_API_KEY: ${HUAWEI_MAAS_API_KEY:?set HUAWEI_MAAS_API_KEY in .env}
     volumes:
       - huawei_generated:/workspace/generated:ro
     command:
@@ -109,6 +110,7 @@ services:
       UI_SECURE_COOKIES: ${UI_SECURE_COOKIES:-false}
       CATALOG_URL: ${CATALOG_URL:-https://catalog.hwctools.site/models}
       HUAWEI_GENERATED_DIR: /app/generated
+      HUAWEI_MAAS_API_KEY: ${HUAWEI_MAAS_API_KEY:?set HUAWEI_MAAS_API_KEY in .env}
     volumes:
       - huawei_generated:/app/generated
     healthcheck:

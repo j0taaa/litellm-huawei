@@ -243,14 +243,23 @@ app.post("/api/test/chat", async (request, reply) => {
     })).min(1),
     max_tokens: z.number().int().min(1).max(8192).optional()
   }).parse(request.body || {});
-  return litellm.request("/chat/completions", body.api_key, {
-    method: "POST",
-    body: JSON.stringify({
-      model: body.model,
-      messages: body.messages,
-      max_tokens: body.max_tokens || 512
-    })
-  });
+  try {
+    return await litellm.request("/chat/completions", body.api_key, {
+      method: "POST",
+      body: JSON.stringify({
+        model: body.model,
+        messages: body.messages,
+        max_tokens: body.max_tokens || 512
+      })
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Request failed";
+    if (isHuaweiProviderAuthError(message)) {
+      reply.code(502);
+      throw new Error("Huawei MaaS provider API key is missing or invalid in LiteLLM. Set HUAWEI_MAAS_API_KEY and restart the stack.");
+    }
+    throw error;
+  }
 });
 
 app.get("/api/stats", async (request, reply) => {
@@ -383,6 +392,14 @@ async function findGeneratedLiteLLMKey(litellmKey: string, result: Record<string
     return rows.find((row) => stringField(row, "key_alias") === alias) || null;
   }
   return null;
+}
+
+function isHuaweiProviderAuthError(message: string) {
+  return (
+    message.includes("ModelArts.81003") ||
+    message.includes("Invalid authorization header") ||
+    message.includes("Huawei MaaS provider API key")
+  );
 }
 
 async function findGeneratedLiteLLMTeam(litellmKey: string, alias: string | null): Promise<string | null> {

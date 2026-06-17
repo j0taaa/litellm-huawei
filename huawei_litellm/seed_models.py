@@ -49,6 +49,22 @@ def wait_for_ready(base_url: str, timeout_seconds: int) -> None:
     raise TimeoutError(f"LiteLLM did not become ready within {timeout_seconds} seconds")
 
 
+def resolve_env_refs_for_litellm(payload: dict[str, Any]) -> dict[str, Any]:
+    resolved = json.loads(json.dumps(payload))
+    litellm_params = resolved.get("litellm_params")
+    if not isinstance(litellm_params, dict):
+        return resolved
+
+    api_key = litellm_params.get("api_key")
+    if isinstance(api_key, str) and api_key.startswith("os.environ/"):
+        env_name = api_key.split("/", 1)[1]
+        value = os.environ.get(env_name)
+        if not value:
+            raise RuntimeError(f"{env_name} is required to seed DB-backed LiteLLM models")
+        litellm_params["api_key"] = value
+    return resolved
+
+
 def seed_models(base_url: str, master_key: str, seed_path: Path) -> None:
     models = json.loads(seed_path.read_text(encoding="utf-8"))
     info = request_json(base_url, "/model/info", master_key)
@@ -70,7 +86,7 @@ def seed_models(base_url: str, master_key: str, seed_path: Path) -> None:
         )
         model["model_info"]["id"] = model_id
         model["model_info"]["db_model"] = True
-        request_json(base_url, "/model/new", master_key, method="POST", payload=model)
+        request_json(base_url, "/model/new", master_key, method="POST", payload=resolve_env_refs_for_litellm(model))
         print(f"seeded Huawei MaaS model {model['model_name']}", flush=True)
 
 
