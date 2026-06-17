@@ -119,6 +119,7 @@ export function ModelsPage() {
             <label>API base<input value={form.api_base} onChange={(e) => setForm({ ...form, api_base: e.target.value })} required /></label>
             <label>API key reference<input value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} required /></label>
             <label>Display name<input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></label>
+            <label className="toggle-row"><input type="checkbox" checked={form.supports_vision} onChange={(e) => setForm({ ...form, supports_vision: e.target.checked })} /> <span>Supports image input</span></label>
             <fieldset className="config-section">
               <span className="field-label">Limits and pricing</span>
               <div className="config-grid">
@@ -162,12 +163,13 @@ export function ModelsPage() {
       ) : null}
       {loading ? <EmptyState text="Loading models" /> : (
         <table>
-          <thead><tr><th>Name</th><th>Upstream</th><th>Provider</th><th>Context</th><th>Output</th><th>Input / 1M</th><th>Output / 1M</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Upstream</th><th>Provider</th><th>Vision</th><th>Context</th><th>Output</th><th>Input / 1M</th><th>Output / 1M</th><th></th></tr></thead>
           <tbody>{models.map((model) => (
             <tr key={model.model_info?.id || model.model_name}>
               <td>{model.model_name}</td>
               <td>{model.litellm_params?.model || "-"}</td>
               <td>{model.litellm_params?.custom_llm_provider || "-"}</td>
+              <td>{model.model_info?.huawei_maas?.supports_vision || model.model_info?.supports_vision ? "Yes" : "No"}</td>
               <td>{model.model_info?.max_input_tokens || "-"}</td>
               <td>{model.model_info?.max_output_tokens || "-"}</td>
               <td>{perMillion(model.model_info?.input_cost_per_token)}</td>

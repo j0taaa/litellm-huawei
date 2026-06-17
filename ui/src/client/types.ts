@@ -1,6 +1,6 @@
 import type { PromptPolicyRule } from "../shared/types";
 
-export type RoutePath = "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/test" | `/stats/keys/${string}` | `/stats/teams/${string}`;
+export type RoutePath = "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/skills" | "/image-support" | "/test" | `/stats/keys/${string}` | `/stats/teams/${string}`;
 export type Tone = "green" | "blue" | "amber" | "violet" | "rose";
 export type DurationUnit = "m" | "h" | "d";
 
@@ -31,6 +31,7 @@ export type KeyFormState = {
   durationUnit: DurationUnit;
   models: string[];
   policyIds: string[];
+  skillIds: string[];
 };
 
 export type TeamFormState = {
@@ -56,6 +57,7 @@ export type TeamFormState = {
   blocked: boolean;
   models: string[];
   policyIds: string[];
+  skillIds: string[];
 };
 
 export type ModelFormState = {
@@ -70,6 +72,7 @@ export type ModelFormState = {
   input_cost_per_million: string;
   output_cost_per_million: string;
   tiered_pricing: boolean;
+  supports_vision: boolean;
   pricing_ranges: PricingRangeForm[];
 };
 
@@ -85,6 +88,15 @@ export type PolicyFormState = {
   description: string;
   enabled: boolean;
   rules: PromptPolicyRule[];
+  keyAssignments: string[];
+  teamAssignments: string[];
+};
+
+export type SkillFormState = {
+  name: string;
+  description: string;
+  enabled: boolean;
+  instructions: string;
   keyAssignments: string[];
   teamAssignments: string[];
 };

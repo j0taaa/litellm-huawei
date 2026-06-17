@@ -16,7 +16,9 @@ from litellm.integrations.custom_logger import CustomLogger
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from huawei_litellm.pricing import find_model, model_cost_usd
+from huawei_litellm.image_support import ImageSupportError, apply_image_support, image_support_config_from_row
 from huawei_litellm.prompt_policies import PromptPolicyBlocked, apply_prompt_policies
+from huawei_litellm.prompt_skills import apply_prompt_skills
 from huawei_litellm.time_access import is_time_access_allowed, time_access_from_metadata
 from huawei_litellm.token_budget import estimate_request_tokens, parse_duration, token_budget_from_metadata
 
@@ -49,6 +51,20 @@ class HuaweiMaaSCostLogger(CustomLogger):
                     status_code=403,
                     detail={"error": "time_access_denied", "source": source, "timezone": time_access.timezone},
                 )
+
+        try:
+            data = await apply_image_support(
+                data,
+                config=await self._image_support_config(),
+                supports_vision=await self._model_supports_vision(_request_model_id(data)),
+            )
+        except ImageSupportError as exc:
+            raise HTTPException(
+                status_code=502 if str(exc).startswith("image_extraction_failed") else 400,
+                detail={"error": str(exc)},
+            ) from exc
+
+        data = apply_prompt_skills(data, auth_metadata)
 
         try:
             policy_result = apply_prompt_policies(data, auth_metadata)
@@ -363,6 +379,28 @@ class HuaweiMaaSCostLogger(CustomLogger):
         metadata = row["metadata"]
         return metadata if isinstance(metadata, dict) else None
 
+    async def _image_support_config(self):
+        pool = await self._db_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT * FROM image_support_settings WHERE id = 'global'")
+        return image_support_config_from_row(row)
+
+    async def _model_supports_vision(self, model_id: str | None) -> bool:
+        if not model_id:
+            return False
+        pool = await self._db_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow('SELECT model_info FROM "LiteLLM_ProxyModelTable" WHERE model_name = $1', model_id)
+        if not row:
+            return False
+        model_info = row["model_info"]
+        if not isinstance(model_info, dict):
+            return False
+        huawei_maas = model_info.get("huawei_maas")
+        if isinstance(huawei_maas, dict) and isinstance(huawei_maas.get("supports_vision"), bool):
+            return bool(huawei_maas["supports_vision"])
+        return bool(model_info.get("supports_vision"))
+
     async def _db_pool(self):
         if self._pool is None:
             import asyncpg
@@ -401,6 +439,19 @@ class HuaweiMaaSCostLogger(CustomLogger):
                     """
                     CREATE INDEX IF NOT EXISTS huawei_token_budget_reservations_key_created_idx
                     ON huawei_token_budget_reservations (key_id, created_at)
+                    """
+                )
+                await conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS image_support_settings (
+                      id TEXT PRIMARY KEY,
+                      enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                      openrouter_api_key TEXT NOT NULL DEFAULT '',
+                      vision_model TEXT NOT NULL DEFAULT 'openai/gpt-4o-mini',
+                      extraction_prompt TEXT NOT NULL DEFAULT '',
+                      max_tokens INTEGER NOT NULL DEFAULT 1200,
+                      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+                    )
                     """
                 )
             self._schema_ready = True

@@ -6,22 +6,28 @@ import fastifyStatic from "@fastify/static";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import { loadConfig } from "./config.js";
+import { ImageSupportStore, imageSupportInputSchema } from "./image-support.js";
 import { arrayFrom, filenamePart, normalizeModelInfoResponse, normalizeModelLists, objectField, publicSession, sendCsv, stringArrayField, stringField } from "./http-utils.js";
 import { LiteLLMClient } from "./litellm.js";
 import { syncHuaweiModels } from "./model-sync.js";
 import { PromptPolicyStore, assignmentInputSchema, keyIdentifier, policyInputSchema } from "./prompt-policies.js";
+import { PromptSkillStore, skillAssignmentInputSchema, skillInputSchema } from "./prompt-skills.js";
 import { signSession, verifyLiteLLMToken, verifySession, type UiSession } from "./session.js";
 import { filterSpendLogsByKey, filterSpendLogsByTeam, spendLogsToCsv, summarizeStats } from "./stats.js";
 
 const config = loadConfig();
 const litellm = new LiteLLMClient(config.litellmBaseUrl);
 const promptPolicies = new PromptPolicyStore(config.databaseUrl, litellm);
+const promptSkills = new PromptSkillStore(config.databaseUrl, litellm);
+const imageSupport = new ImageSupportStore(config.databaseUrl);
 const app = Fastify({ logger: true });
 const sessionCookie = "maas_ui_session";
 
 await app.register(cookie);
 await app.register(formbody);
 await promptPolicies.ready();
+await promptSkills.ready();
+await imageSupport.ready();
 
 app.get("/health", async () => ({ status: "ok" }));
 
@@ -112,16 +118,22 @@ app.post("/api/keys", async (request, reply) => {
   const session = await requireSession(request, reply);
   const body = request.body as Record<string, unknown> || {};
   const promptPolicyIds = stringArrayField(body, "prompt_policy_ids");
-  const metadata = await promptPolicies.metadataForKey(null, stringField(body, "team_id"), objectField(body, "metadata"));
+  const promptSkillIds = stringArrayField(body, "prompt_skill_ids");
+  const metadata = await metadataForKey(null, stringField(body, "team_id"), objectField(body, "metadata"));
   const payload: Record<string, unknown> = { ...body, metadata };
   delete payload.prompt_policy_ids;
+  delete payload.prompt_skill_ids;
   const result = await litellm.request<Record<string, unknown>>("/key/generate", session.litellmKey, {
     method: "POST",
     body: JSON.stringify(payload)
   });
-  if (promptPolicyIds.length) {
+  if (promptPolicyIds.length || promptSkillIds.length) {
     const createdKey = await findGeneratedLiteLLMKey(session.litellmKey, result, stringField(body, "key_alias"));
-    if (createdKey) await promptPolicies.setKeyPolicyAssignments(keyIdentifier(createdKey), promptPolicyIds, session.litellmKey);
+    if (createdKey) {
+      const createdKeyId = keyIdentifier(createdKey);
+      await promptPolicies.setKeyPolicyAssignments(createdKeyId, promptPolicyIds, session.litellmKey);
+      await promptSkills.setKeySkillAssignments(createdKeyId, promptSkillIds, session.litellmKey);
+    }
   }
   return result;
 });
@@ -131,18 +143,23 @@ app.patch("/api/keys/:key", async (request, reply) => {
   const params = z.object({ key: z.string().min(1) }).parse(request.params);
   const body = request.body as Record<string, unknown> || {};
   const promptPolicyIds = stringArrayField(body, "prompt_policy_ids");
+  const promptSkillIds = stringArrayField(body, "prompt_skill_ids");
   const existing = await findLiteLLMKey(session.litellmKey, params.key);
   const teamId = stringField(body, "team_id") ?? (existing ? stringField(existing, "team_id") : null);
   const requestedMetadata = body.metadata === undefined ? objectField(existing, "metadata") : objectField(body, "metadata");
-  const metadata = await promptPolicies.metadataForKey(params.key, teamId, requestedMetadata);
+  const metadata = await metadataForKey(params.key, teamId, requestedMetadata);
   const payload: Record<string, unknown> = { ...body, key: params.key, metadata };
   delete payload.prompt_policy_ids;
+  delete payload.prompt_skill_ids;
   const result = await litellm.request("/key/update", session.litellmKey, {
     method: "POST",
     body: JSON.stringify(payload)
   });
   if (body.prompt_policy_ids !== undefined) {
     await promptPolicies.setKeyPolicyAssignments(params.key, promptPolicyIds, session.litellmKey);
+  }
+  if (body.prompt_skill_ids !== undefined) {
+    await promptSkills.setKeySkillAssignments(params.key, promptSkillIds, session.litellmKey);
   }
   return result;
 });
@@ -166,12 +183,17 @@ app.post("/api/teams", async (request, reply) => {
   const session = await requireSession(request, reply);
   const body = request.body as Record<string, unknown> || {};
   const promptPolicyIds = stringArrayField(body, "prompt_policy_ids");
+  const promptSkillIds = stringArrayField(body, "prompt_skill_ids");
   const payload: Record<string, unknown> = { ...body };
   delete payload.prompt_policy_ids;
+  delete payload.prompt_skill_ids;
   const result = await litellm.request<Record<string, unknown>>("/team/new", session.litellmKey, { method: "POST", body: JSON.stringify(payload) });
-  if (promptPolicyIds.length) {
+  if (promptPolicyIds.length || promptSkillIds.length) {
     const teamId = stringField(result, "team_id") || await findGeneratedLiteLLMTeam(session.litellmKey, stringField(body, "team_alias"));
-    if (teamId) await promptPolicies.setTeamPolicyAssignments(teamId, promptPolicyIds, session.litellmKey);
+    if (teamId) {
+      await promptPolicies.setTeamPolicyAssignments(teamId, promptPolicyIds, session.litellmKey);
+      await promptSkills.setTeamSkillAssignments(teamId, promptSkillIds, session.litellmKey);
+    }
   }
   return result;
 });
@@ -181,8 +203,10 @@ app.patch("/api/teams/:teamId", async (request, reply) => {
   const params = z.object({ teamId: z.string() }).parse(request.params);
   const body = request.body as Record<string, unknown> || {};
   const promptPolicyIds = stringArrayField(body, "prompt_policy_ids");
+  const promptSkillIds = stringArrayField(body, "prompt_skill_ids");
   const payload: Record<string, unknown> = { ...body, team_id: params.teamId };
   delete payload.prompt_policy_ids;
+  delete payload.prompt_skill_ids;
   const result = await litellm.request("/team/update", session.litellmKey, {
     method: "POST",
     body: JSON.stringify(payload)
@@ -190,7 +214,11 @@ app.patch("/api/teams/:teamId", async (request, reply) => {
   if (body.prompt_policy_ids !== undefined) {
     await promptPolicies.setTeamPolicyAssignments(params.teamId, promptPolicyIds, session.litellmKey);
   }
+  if (body.prompt_skill_ids !== undefined) {
+    await promptSkills.setTeamSkillAssignments(params.teamId, promptSkillIds, session.litellmKey);
+  }
   await promptPolicies.syncAllEffectivePolicies(session.litellmKey);
+  await promptSkills.syncAllEffectiveSkills(session.litellmKey);
   return result;
 });
 
@@ -230,6 +258,45 @@ app.put("/api/prompt-policies/:policyId/assignments", async (request, reply) => 
   const params = z.object({ policyId: z.string().min(1) }).parse(request.params);
   const body = assignmentInputSchema.parse(request.body || {});
   return promptPolicies.setAssignments(params.policyId, body.assignments, session.litellmKey);
+});
+
+app.get("/api/skills", async (request, reply) => {
+  await requireSession(request, reply);
+  return { skills: await promptSkills.list() };
+});
+
+app.post("/api/skills", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  return promptSkills.create(skillInputSchema.parse(request.body || {}), session.litellmKey);
+});
+
+app.patch("/api/skills/:skillId", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ skillId: z.string().min(1) }).parse(request.params);
+  return promptSkills.update(params.skillId, skillInputSchema.parse(request.body || {}), session.litellmKey);
+});
+
+app.delete("/api/skills/:skillId", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ skillId: z.string().min(1) }).parse(request.params);
+  return promptSkills.delete(params.skillId, session.litellmKey);
+});
+
+app.put("/api/skills/:skillId/assignments", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ skillId: z.string().min(1) }).parse(request.params);
+  const body = skillAssignmentInputSchema.parse(request.body || {});
+  return promptSkills.setAssignments(params.skillId, body.assignments, session.litellmKey);
+});
+
+app.get("/api/image-support", async (request, reply) => {
+  await requireSession(request, reply);
+  return imageSupport.get();
+});
+
+app.put("/api/image-support", async (request, reply) => {
+  await requireSession(request, reply);
+  return imageSupport.update(imageSupportInputSchema.parse(request.body || {}));
 });
 
 app.post("/api/test/chat", async (request, reply) => {
@@ -379,6 +446,11 @@ async function findLiteLLMKey(litellmKey: string, key: string): Promise<Record<s
     if (keyIdentifier(row) === key) return row;
   }
   return null;
+}
+
+async function metadataForKey(keyId: string | null, teamId: string | null, existingMetadata: Record<string, unknown> | null | undefined) {
+  const withPolicies = await promptPolicies.metadataForKey(keyId, teamId, existingMetadata);
+  return promptSkills.metadataForKey(keyId, teamId, withPolicies);
 }
 
 async function findGeneratedLiteLLMKey(litellmKey: string, result: Record<string, unknown>, alias: string | null): Promise<Record<string, unknown> | null> {

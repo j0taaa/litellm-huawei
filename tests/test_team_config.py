@@ -37,11 +37,21 @@ def logger_with_team(monkeypatch, team_metadata):
     logger = HuaweiMaaSCostLogger()
 
     async def team_metadata_lookup(team_id):
+        if team_id is None:
+            return None
         assert team_id == "team-a"
         return team_metadata
 
+    async def image_support_config():
+        return None
+
+    async def model_supports_vision(model_id):
+        return False
+
     monkeypatch.setattr(logger, "_team_metadata", team_metadata_lookup)
     monkeypatch.setattr(logger, "_model_max_output_tokens", lambda model_id: 64)
+    monkeypatch.setattr(logger, "_image_support_config", image_support_config)
+    monkeypatch.setattr(logger, "_model_supports_vision", model_supports_vision)
     return logger
 
 
@@ -151,6 +161,81 @@ def test_team_schedule_denial_blocks_request(monkeypatch):
 
     assert exc.value.detail["error"] == "time_access_denied"
     assert exc.value.detail["source"] == "team"
+
+
+def test_prompt_skills_are_appended_before_request(monkeypatch):
+    logger = logger_with_team(monkeypatch, {})
+
+    data = run(
+        logger.async_pre_call_hook(
+            {
+                "token": "key-a",
+                "metadata": {
+                    "huawei_prompt_skills": {
+                        "skills": [
+                            {
+                                "id": "skill-exa",
+                                "name": "Exa research",
+                                "source": "key",
+                                "enabled": True,
+                                "instructions": "Use Exa-style web research when relevant.",
+                            }
+                        ]
+                    }
+                },
+            },
+            None,
+            {"model": "deepseek-v4-pro", "messages": [{"role": "user", "content": "Find sources"}]},
+            "chat",
+        )
+    )
+
+    assert "Available built-in skills" in data["messages"][0]["content"]
+    assert data["metadata"]["huawei_prompt_skills_applied"][0]["id"] == "skill-exa"
+
+
+def test_image_request_to_text_only_model_is_transformed(monkeypatch):
+    logger = logger_with_team(monkeypatch, {})
+
+    async def fake_apply(data, *, config, supports_vision):
+        assert not supports_vision
+        data["messages"][0]["content"] = "What is this?\n\nImage analysis:\nA chart with revenue bars."
+        data["metadata"] = {"huawei_image_extraction": {"extracted": True, "model": "openai/gpt-4o-mini"}}
+        return data
+
+    monkeypatch.setattr(custom_callbacks, "apply_image_support", fake_apply)
+
+    async def image_support_config():
+        return {"enabled": True}
+
+    async def model_supports_vision(model_id):
+        return False
+
+    monkeypatch.setattr(logger, "_image_support_config", image_support_config)
+    monkeypatch.setattr(logger, "_model_supports_vision", model_supports_vision)
+
+    data = run(
+        logger.async_pre_call_hook(
+            {"token": "key-a", "metadata": {}},
+            None,
+            {
+                "model": "deepseek-v4-pro",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "What is this?"},
+                            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                        ],
+                    }
+                ],
+            },
+            "chat",
+        )
+    )
+
+    assert data["messages"][0]["content"].endswith("A chart with revenue bars.")
+    assert data["metadata"]["huawei_image_extraction"]["extracted"] is True
 
 
 def test_single_reservation_metadata_shape_still_parses():

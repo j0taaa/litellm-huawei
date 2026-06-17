@@ -147,6 +147,7 @@ export function modelEntries(catalog: HuaweiCatalog) {
           pricing_unit: catalog.pricingUnit || "1M tokens",
           currency: catalog.currency || "USD",
           tiered_pricing: tiered,
+          supports_vision: false,
           pricing: model.pricing
         }
       }

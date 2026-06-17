@@ -55,10 +55,12 @@ export type ModelInfo = {
     max_output_tokens?: number;
     input_cost_per_token?: number;
     output_cost_per_token?: number;
+    supports_vision?: boolean;
     huawei_maas?: {
       id: string;
       name: string;
       tiered_pricing: boolean;
+      supports_vision?: boolean;
       currency: string;
       pricing_unit?: string;
       pricing: {
@@ -92,6 +94,30 @@ export type PromptPolicy = {
   enabled: boolean;
   rules: PromptPolicyRule[];
   assignments: PromptPolicyAssignment[];
+};
+
+export type PromptSkillAssignment = {
+  target_type: "key" | "team";
+  target_id: string;
+};
+
+export type PromptSkill = {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  instructions: string;
+  assignments: PromptSkillAssignment[];
+};
+
+export type ImageSupportSettings = {
+  enabled: boolean;
+  openrouter_api_key_present: boolean;
+  openrouter_api_key_masked: string;
+  vision_model: string;
+  extraction_prompt: string;
+  max_tokens: number;
+  updated_at?: string | null;
 };
 
 export type StatsSummary = {

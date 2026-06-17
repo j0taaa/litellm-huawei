@@ -47,6 +47,7 @@ def model_entries(catalog: dict[str, Any]) -> list[dict[str, Any]]:
                         "pricing_unit": catalog.get("pricingUnit", "1M tokens"),
                         "currency": catalog.get("currency", "USD"),
                         "tiered_pricing": tiered,
+                        "supports_vision": False,
                         "pricing": model["pricing"],
                     },
                 },

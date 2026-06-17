@@ -1,5 +1,5 @@
-import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptPolicyRule, TeamRow } from "../shared/types";
-import type { DurationUnit, KeyFormState, ModelFormState, PolicyFormState, PricingRangeForm, TeamFormState } from "./types";
+import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptPolicyRule, PromptSkill, TeamRow } from "../shared/types";
+import type { DurationUnit, KeyFormState, ModelFormState, PolicyFormState, PricingRangeForm, SkillFormState, TeamFormState } from "./types";
 import { clean, costPerMillionString, objectField, stringField } from "./utils";
 
 export const weekDays = [
@@ -50,7 +50,8 @@ export const defaultKeyForm: KeyFormState = {
   durationAmount: 30,
   durationUnit: "d",
   models: [],
-  policyIds: []
+  policyIds: [],
+  skillIds: []
 };
 
 export const defaultTeamForm: TeamFormState = {
@@ -75,7 +76,8 @@ export const defaultTeamForm: TeamFormState = {
   accessEnd: "17:00",
   blocked: false,
   models: [],
-  policyIds: []
+  policyIds: [],
+  skillIds: []
 };
 
 export const defaultPolicyRule: PromptPolicyRule = {
@@ -97,6 +99,15 @@ export const defaultPolicyForm: PolicyFormState = {
   teamAssignments: []
 };
 
+export const defaultSkillForm: SkillFormState = {
+  name: "",
+  description: "",
+  enabled: true,
+  instructions: "",
+  keyAssignments: [],
+  teamAssignments: []
+};
+
 export const defaultModelForm: ModelFormState = {
   model_name: "",
   upstream_model: "",
@@ -109,6 +120,7 @@ export const defaultModelForm: ModelFormState = {
   input_cost_per_million: "",
   output_cost_per_million: "",
   tiered_pricing: false,
+  supports_vision: false,
   pricing_ranges: defaultPricingRanges()
 };
 
@@ -138,6 +150,26 @@ export function policyPayload(form: PolicyFormState): Record<string, unknown> {
       replacement: rule.action === "redact" ? rule.replacement || "[REDACTED]" : undefined,
       append_text: rule.action === "append" ? rule.append_text : undefined
     }))
+  };
+}
+
+export function skillFormFromSkill(skill: PromptSkill): SkillFormState {
+  return {
+    name: skill.name,
+    description: skill.description || "",
+    enabled: skill.enabled,
+    instructions: skill.instructions,
+    keyAssignments: skill.assignments.filter((assignment) => assignment.target_type === "key").map((assignment) => assignment.target_id),
+    teamAssignments: skill.assignments.filter((assignment) => assignment.target_type === "team").map((assignment) => assignment.target_id)
+  };
+}
+
+export function skillPayload(form: SkillFormState): Record<string, unknown> {
+  return {
+    name: form.name,
+    description: form.description,
+    enabled: form.enabled,
+    instructions: form.instructions
   };
 }
 
@@ -177,7 +209,8 @@ export function keyPayload(form: KeyFormState, mode: "create" | "edit" | "clone"
     metadata: Object.keys(metadata).length ? metadata : (editing ? {} : undefined),
     blocked: editing || cloning ? form.blocked : undefined,
     models: form.models,
-    prompt_policy_ids: form.policyIds
+    prompt_policy_ids: form.policyIds,
+    prompt_skill_ids: form.skillIds
   });
 }
 
@@ -193,11 +226,12 @@ export function teamPayload(form: TeamFormState, editing: boolean): Record<strin
     metadata: Object.keys(metadata).length ? metadata : (editing ? {} : undefined),
     blocked: editing ? form.blocked : undefined,
     models: form.models,
-    prompt_policy_ids: form.policyIds
+    prompt_policy_ids: form.policyIds,
+    prompt_skill_ids: form.skillIds
   });
 }
 
-export function teamFormFromRow(row: TeamRow, policies: PromptPolicy[] = []): TeamFormState {
+export function teamFormFromRow(row: TeamRow, policies: PromptPolicy[] = [], skills: PromptSkill[] = []): TeamFormState {
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   const tokenBudget = objectField(metadata, "huawei_token_budget");
   const timeAccess = objectField(metadata, "huawei_time_access");
@@ -232,11 +266,14 @@ export function teamFormFromRow(row: TeamRow, policies: PromptPolicy[] = []): Te
     models: row.models || [],
     policyIds: policies
       .filter((policy) => policy.assignments.some((assignment) => assignment.target_type === "team" && assignment.target_id === row.team_id))
-      .map((policy) => policy.id)
+      .map((policy) => policy.id),
+    skillIds: skills
+      .filter((skill) => skill.assignments.some((assignment) => assignment.target_type === "team" && assignment.target_id === row.team_id))
+      .map((skill) => skill.id)
   };
 }
 
-export function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], key = ""): KeyFormState {
+export function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], key = "", skills: PromptSkill[] = []): KeyFormState {
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   const tokenBudget = objectField(metadata, "huawei_token_budget");
   const timeAccess = objectField(metadata, "huawei_time_access");
@@ -274,7 +311,10 @@ export function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], ke
     models: row.models || [],
     policyIds: policies
       .filter((policy) => policy.assignments.some((assignment) => assignment.target_type === "key" && assignment.target_id === key))
-      .map((policy) => policy.id)
+      .map((policy) => policy.id),
+    skillIds: skills
+      .filter((skill) => skill.assignments.some((assignment) => assignment.target_type === "key" && assignment.target_id === key))
+      .map((skill) => skill.id)
   };
 }
 
@@ -301,6 +341,7 @@ export function modelFormFromInfo(model: ModelInfo): ModelFormState {
     input_cost_per_million: costPerMillionString(model.model_info?.input_cost_per_token),
     output_cost_per_million: costPerMillionString(model.model_info?.output_cost_per_token),
     tiered_pricing: Boolean(huaweiMaaS?.tiered_pricing),
+    supports_vision: Boolean(huaweiMaaS?.supports_vision || model.model_info?.supports_vision),
     pricing_ranges: pricingRanges.length ? pricingRanges : defaultPricingRanges(
       costPerMillionString(model.model_info?.input_cost_per_token),
       costPerMillionString(model.model_info?.output_cost_per_token)
@@ -345,10 +386,12 @@ export function modelPayload(form: ModelFormState, existing: ModelInfo | null): 
       id: form.upstream_model,
       name: form.display_name || form.model_name,
       tiered_pricing: form.tiered_pricing,
+      supports_vision: form.supports_vision,
       currency: existing?.model_info?.huawei_maas?.currency || "USD",
       pricing_unit: existing?.model_info?.huawei_maas?.pricing_unit || "1M tokens",
       pricing: form.tiered_pricing ? huaweiPricing : { input: [], output: [] }
-    })
+    }),
+    supports_vision: form.supports_vision ? true : undefined
   });
   return {
     model_name: form.model_name,

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CalendarClock, Pencil, Plus, Power, RefreshCcw, Trash2, Users } from "lucide-react";
-import type { ModelInfo, PromptPolicy, TeamRow } from "../../shared/types";
+import type { ModelInfo, PromptPolicy, PromptSkill, TeamRow } from "../../shared/types";
 import { api, useResource } from "../api";
 import { EmptyState, Header, Modal, StatusBadge } from "../components";
 import { defaultTeamForm, teamFormFromRow, teamPayload, timezones, weekDays } from "../form-state";
@@ -11,9 +11,11 @@ export function TeamsPage() {
   const { data, loading, reload } = useResource<TeamRow[] | { teams?: TeamRow[]; data?: TeamRow[] }>("/api/teams");
   const models = useResource<{ data?: ModelInfo[] }>("/api/models");
   const policiesResource = useResource<{ policies: PromptPolicy[] }>("/api/prompt-policies");
+  const skillsResource = useResource<{ skills: PromptSkill[] }>("/api/skills");
   const teams = Array.isArray(data) ? data : data?.teams || data?.data || [];
   const modelNames = (models.data?.data || []).map((model) => model.model_name);
   const policies = policiesResource.data?.policies || [];
+  const skills = skillsResource.data?.skills || [];
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<TeamRow | null>(null);
   const [saving, setSaving] = useState(false);
@@ -61,7 +63,7 @@ export function TeamsPage() {
 
   function openEditTeam(team: TeamRow) {
     setEditingTeam(team);
-    setForm(teamFormFromRow(team, policies));
+    setForm(teamFormFromRow(team, policies, skills));
     setModalOpen(true);
   }
 
@@ -77,6 +79,10 @@ export function TeamsPage() {
 
   function toggleTeamPolicy(policyId: string) {
     setForm({ ...form, policyIds: toggleValue(form.policyIds, policyId) });
+  }
+
+  function toggleTeamSkill(skillId: string) {
+    setForm({ ...form, skillIds: toggleValue(form.skillIds, skillId) });
   }
 
   function toggleTeamAccessDay(day: number) {
@@ -189,6 +195,16 @@ export function TeamsPage() {
               <p className="field-note">{form.policyIds.length ? `${form.policyIds.length} selected` : "No team prompt policies are assigned."}</p>
               <div className="model-checks">
                 {policies.map((policy) => <label className="model-check" key={policy.id}><input type="checkbox" checked={form.policyIds.includes(policy.id)} onChange={() => toggleTeamPolicy(policy.id)} /><span>{policy.name}</span></label>)}
+              </div>
+            </fieldset>
+            <fieldset className="model-access">
+              <div className="model-access-header">
+                <span className="field-label">Skills</span>
+                <div className="model-actions"><button type="button" className="text-action" onClick={() => setForm({ ...form, skillIds: skills.map((skill) => skill.id) })}>Select all</button><button type="button" className="text-action" onClick={() => setForm({ ...form, skillIds: [] })}>Clear</button></div>
+              </div>
+              <p className="field-note">{form.skillIds.length ? `${form.skillIds.length} selected` : "No team prompt skills are assigned."}</p>
+              <div className="model-checks">
+                {skills.map((skill) => <label className="model-check" key={skill.id}><input type="checkbox" checked={form.skillIds.includes(skill.id)} onChange={() => toggleTeamSkill(skill.id)} /><span>{skill.name}</span></label>)}
               </div>
             </fieldset>
             <div className="modal-actions"><button type="button" className="secondary" onClick={closeTeamModal}>Cancel</button><button className="primary" disabled={saving || scheduleInvalid}>{saving ? "Saving" : editingTeam ? "Save changes" : "Create team"}</button></div>

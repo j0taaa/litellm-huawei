@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CalendarClock, Copy, KeyRound, Pencil, Plus, Power, RefreshCcw, Trash2 } from "lucide-react";
-import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, TeamRow } from "../../shared/types";
+import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptSkill, TeamRow } from "../../shared/types";
 import { api, useResource } from "../api";
 import { EmptyState, Header, Modal, StatusBadge } from "../components";
 import { defaultKeyForm, keyFormFromRow, keyIdentifier, keyPayload, normalizeKeyRow, timezones, weekDays } from "../form-state";
@@ -12,6 +12,7 @@ export function KeysPage() {
   const models = useResource<{ data?: ModelInfo[] }>("/api/models");
   const teamsResource = useResource<TeamRow[] | { teams?: TeamRow[]; data?: TeamRow[] }>("/api/teams");
   const policiesResource = useResource<{ policies: PromptPolicy[] }>("/api/prompt-policies");
+  const skillsResource = useResource<{ skills: PromptSkill[] }>("/api/skills");
   const [createdKey, setCreatedKey] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<ApiKeyListRow | null>(null);
@@ -24,6 +25,7 @@ export function KeysPage() {
   const modelNames = (models.data?.data || []).map((model) => model.model_name);
   const teams = Array.isArray(teamsResource.data) ? teamsResource.data : teamsResource.data?.teams || teamsResource.data?.data || [];
   const policies = policiesResource.data?.policies || [];
+  const skills = skillsResource.data?.skills || [];
   const scheduleInvalid = form.accessSchedule && form.accessDays.length === 0;
 
   async function submitKey(event: React.FormEvent) {
@@ -57,6 +59,10 @@ export function KeysPage() {
     setForm({ ...form, policyIds: toggleValue(form.policyIds, policyId) });
   }
 
+  function toggleKeySkill(skillId: string) {
+    setForm({ ...form, skillIds: toggleValue(form.skillIds, skillId) });
+  }
+
   function toggleAccessDay(day: number) {
     const nextDays = form.accessDays.includes(day)
       ? form.accessDays.filter((value) => value !== day)
@@ -74,7 +80,7 @@ export function KeysPage() {
 
   function openEditModal(row: ApiKeyListRow) {
     const key = keyIdentifier(row);
-    setForm(keyFormFromRow(normalizeKeyRow(row), policies, key));
+    setForm(keyFormFromRow(normalizeKeyRow(row), policies, key, skills));
     setCreatedKey("");
     setEditingKey(row);
     setCloningKey(null);
@@ -83,7 +89,7 @@ export function KeysPage() {
 
   function openCloneModal(row: ApiKeyListRow) {
     const key = keyIdentifier(row);
-    const nextForm = keyFormFromRow(normalizeKeyRow(row), policies, key);
+    const nextForm = keyFormFromRow(normalizeKeyRow(row), policies, key, skills);
     setForm({
       ...nextForm,
       key_alias: nextForm.key_alias ? `${nextForm.key_alias} copy` : ""
@@ -318,6 +324,24 @@ export function KeysPage() {
                     <label className="model-check" key={policy.id}>
                       <input type="checkbox" checked={form.policyIds.includes(policy.id)} onChange={() => toggleKeyPolicy(policy.id)} />
                       <span>{policy.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="model-access">
+                <div className="model-access-header">
+                  <span className="field-label">Skills</span>
+                  <div className="model-actions">
+                    <button type="button" className="text-action" onClick={() => setForm({ ...form, skillIds: skills.map((skill) => skill.id) })}>Select all</button>
+                    <button type="button" className="text-action" onClick={() => setForm({ ...form, skillIds: [] })}>Clear</button>
+                  </div>
+                </div>
+                <p className="field-note">{form.skillIds.length ? `${form.skillIds.length} selected` : "No key-specific prompt skills are assigned."}</p>
+                <div className="model-checks">
+                  {skills.map((skill) => (
+                    <label className="model-check" key={skill.id}>
+                      <input type="checkbox" checked={form.skillIds.includes(skill.id)} onChange={() => toggleKeySkill(skill.id)} />
+                      <span>{skill.name}</span>
                     </label>
                   ))}
                 </div>
