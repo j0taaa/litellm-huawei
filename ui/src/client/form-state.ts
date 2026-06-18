@@ -1,5 +1,5 @@
 import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptPolicyRule, PromptSkill, TeamRow } from "../shared/types";
-import type { DurationUnit, KeyFormState, ModelFormState, PolicyFormState, PricingRangeForm, SkillFormState, TeamFormState } from "./types";
+import type { DurationUnit, KeyFormState, ModelFormState, PolicyFormState, PricingRangeForm, SkillFormState, TeamFormState, WebSearchFormState } from "./types";
 import { clean, costPerMillionString, objectField, stringField } from "./utils";
 
 export const weekDays = [
@@ -23,6 +23,16 @@ export const timezones = [
   "Asia/Singapore",
   "Asia/Tokyo"
 ];
+
+export const defaultWebSearchForm: WebSearchFormState = {
+  enabled: false,
+  mode: "trigger",
+  searchToolName: "",
+  plannerModel: "",
+  trigger: "[SEARCH]",
+  maxResults: 5,
+  maxQueries: 2
+};
 
 export const defaultKeyForm: KeyFormState = {
   key_alias: "",
@@ -51,7 +61,8 @@ export const defaultKeyForm: KeyFormState = {
   durationUnit: "d",
   models: [],
   policyIds: [],
-  skillIds: []
+  skillIds: [],
+  webSearch: { ...defaultWebSearchForm }
 };
 
 export const defaultTeamForm: TeamFormState = {
@@ -77,7 +88,8 @@ export const defaultTeamForm: TeamFormState = {
   blocked: false,
   models: [],
   policyIds: [],
-  skillIds: []
+  skillIds: [],
+  webSearch: { ...defaultWebSearchForm }
 };
 
 export const defaultPolicyRule: PromptPolicyRule = {
@@ -189,6 +201,15 @@ export function sharedLimitMetadata(form: KeyFormState | TeamFormState): Record<
           end: form.accessHours ? form.accessEnd : undefined
         })
       ]
+    }) : undefined,
+    huawei_web_search: form.webSearch.enabled ? clean({
+      enabled: true,
+      mode: form.webSearch.mode,
+      search_tool_name: form.webSearch.searchToolName,
+      planner_model: form.webSearch.plannerModel,
+      trigger: form.webSearch.mode === "trigger" ? form.webSearch.trigger || defaultWebSearchForm.trigger : undefined,
+      max_results: form.webSearch.maxResults,
+      max_queries: form.webSearch.maxQueries
     }) : undefined
   });
 }
@@ -235,6 +256,7 @@ export function teamFormFromRow(row: TeamRow, policies: PromptPolicy[] = [], ski
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   const tokenBudget = objectField(metadata, "huawei_token_budget");
   const timeAccess = objectField(metadata, "huawei_time_access");
+  const webSearch = webSearchFormFromMetadata(metadata);
   const firstRule = Array.isArray(timeAccess.rules) && timeAccess.rules[0] && typeof timeAccess.rules[0] === "object"
     ? timeAccess.rules[0] as Record<string, unknown>
     : {};
@@ -269,7 +291,8 @@ export function teamFormFromRow(row: TeamRow, policies: PromptPolicy[] = [], ski
       .map((policy) => policy.id),
     skillIds: skills
       .filter((skill) => skill.assignments.some((assignment) => assignment.target_type === "team" && assignment.target_id === row.team_id))
-      .map((skill) => skill.id)
+      .map((skill) => skill.id),
+    webSearch
   };
 }
 
@@ -277,6 +300,7 @@ export function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], ke
   const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   const tokenBudget = objectField(metadata, "huawei_token_budget");
   const timeAccess = objectField(metadata, "huawei_time_access");
+  const webSearch = webSearchFormFromMetadata(metadata);
   const firstRule = Array.isArray(timeAccess.rules) && timeAccess.rules[0] && typeof timeAccess.rules[0] === "object"
     ? timeAccess.rules[0] as Record<string, unknown>
     : {};
@@ -314,8 +338,33 @@ export function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], ke
       .map((policy) => policy.id),
     skillIds: skills
       .filter((skill) => skill.assignments.some((assignment) => assignment.target_type === "key" && assignment.target_id === key))
-      .map((skill) => skill.id)
+      .map((skill) => skill.id),
+    webSearch
   };
+}
+
+function webSearchFormFromMetadata(metadata: Record<string, unknown>): WebSearchFormState {
+  const webSearch = objectField(metadata, "huawei_web_search");
+  return {
+    ...defaultWebSearchForm,
+    enabled: webSearch.enabled === true,
+    mode: webSearch.mode === "automatic" ? "automatic" : "trigger",
+    searchToolName: stringField(webSearch, "search_tool_name") || "",
+    plannerModel: stringField(webSearch, "planner_model") || "",
+    trigger: stringField(webSearch, "trigger") || defaultWebSearchForm.trigger,
+    maxResults: numberField(webSearch, "max_results") || defaultWebSearchForm.maxResults,
+    maxQueries: numberField(webSearch, "max_queries") || defaultWebSearchForm.maxQueries
+  };
+}
+
+function numberField(value: Record<string, unknown>, key: string): number | null {
+  const field = value[key];
+  if (typeof field === "number" && Number.isFinite(field)) return field;
+  if (typeof field === "string" && field) {
+    const parsed = Number(field);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 export function parseDurationValue(value: unknown): { amount: number; unit: DurationUnit } {

@@ -1,21 +1,24 @@
 import { useState } from "react";
 import { CalendarClock, Pencil, Plus, Power, RefreshCcw, Trash2, Users } from "lucide-react";
-import type { ModelInfo, PromptPolicy, PromptSkill, TeamRow } from "../../shared/types";
+import type { ModelInfo, PromptPolicy, PromptSkill, SearchTool, TeamRow } from "../../shared/types";
 import { api, useResource } from "../api";
 import { EmptyState, Header, Modal, StatusBadge } from "../components";
 import { defaultTeamForm, teamFormFromRow, teamPayload, timezones, weekDays } from "../form-state";
 import type { DurationUnit, TeamFormState } from "../types";
 import { currency, toggleValue } from "../utils";
+import { WebSearchControls } from "../web-search-controls";
 
 export function TeamsPage() {
   const { data, loading, reload } = useResource<TeamRow[] | { teams?: TeamRow[]; data?: TeamRow[] }>("/api/teams");
   const models = useResource<{ data?: ModelInfo[] }>("/api/models");
   const policiesResource = useResource<{ policies: PromptPolicy[] }>("/api/prompt-policies");
   const skillsResource = useResource<{ skills: PromptSkill[] }>("/api/skills");
+  const searchToolsResource = useResource<{ search_tools?: SearchTool[] }>("/api/search-tools");
   const teams = Array.isArray(data) ? data : data?.teams || data?.data || [];
   const modelNames = (models.data?.data || []).map((model) => model.model_name);
   const policies = policiesResource.data?.policies || [];
   const skills = skillsResource.data?.skills || [];
+  const searchTools = searchToolsResource.data?.search_tools || [];
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTeam, setEditingTeam] = useState<TeamRow | null>(null);
   const [saving, setSaving] = useState(false);
@@ -177,6 +180,12 @@ export function TeamsPage() {
                 </>
               ) : <p className="field-note compact">This team can be used at any time.</p>}
             </fieldset>
+            <WebSearchControls
+              value={form.webSearch}
+              onChange={(webSearch) => setForm({ ...form, webSearch })}
+              searchTools={searchTools}
+              models={models.data?.data || []}
+            />
             <fieldset className="model-access">
               <div className="model-access-header">
                 <span className="field-label">Model access</span>

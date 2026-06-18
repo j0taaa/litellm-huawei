@@ -55,7 +55,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
             max_parallel_requests: 2,
             models: ["deepseek-v4-flash"],
             metadata: {
-              huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] }
+              huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
+              huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 }
             },
             blocked: false
           }]
@@ -111,6 +112,13 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     }
     await route.continue();
   });
+  await page.route("**/api/search-tools", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ search_tools: [{ search_tool_id: "search-tool-1", search_tool_name: "perplexity-search", litellm_params: { search_provider: "perplexity" }, is_from_config: false }] })
+    });
+  });
   await page.getByRole("link", { name: "Keys" }).click();
   await expect(page.getByRole("heading", { name: "Keys" })).toBeVisible();
   await expect(page).toHaveURL(/\/keys$/);
@@ -152,9 +160,18 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("Set expiration").check();
   await expect(page.getByLabel("Expires after")).toHaveValue("30");
   await expect(page.getByLabel("Expiration unit")).toHaveValue("d");
+  await expect(page.getByLabel("Enable web search augmentation")).not.toBeChecked();
+  await expect(page.getByText("No web search context is added before model calls.")).toBeVisible();
+  await page.getByLabel("Enable web search augmentation").check();
+  await expect(page.getByLabel("Search mode")).toHaveValue("trigger");
+  await page.getByLabel("Search tool").selectOption("perplexity-search");
+  await page.getByLabel("Planner model").selectOption("deepseek-v4-flash");
+  await expect(page.getByLabel("Trigger token")).toHaveValue("[SEARCH]");
+  await expect(page.getByLabel("Max results")).toHaveValue("5");
+  await expect(page.getByLabel("Max queries")).toHaveValue("2");
   await expect(page.getByText("No models selected means this key can use all models.")).toBeVisible();
-  await expect(page.getByLabel("deepseek-v4-flash")).toBeVisible();
-  await page.getByLabel("deepseek-v4-flash").check();
+  await expect(page.getByRole("checkbox", { name: "deepseek-v4-flash" })).toBeVisible();
+  await page.getByRole("checkbox", { name: "deepseek-v4-flash" }).check();
   await expect(page.getByText("1 selected")).toBeVisible();
   await expect(page.getByLabel(/openai\//)).toHaveCount(0);
   await expect(page.getByLabel("CPF redaction")).toBeVisible();
@@ -169,7 +186,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
       huawei_time_access: {
         timezone: "America/Sao_Paulo",
         rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }]
-      }
+      },
+      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 }
     },
     models: ["deepseek-v4-flash"]
   });
@@ -186,6 +204,9 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Max TPM")).toHaveValue("1000");
   await expect(page.getByLabel("Max parallel")).toHaveValue("2");
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
+  await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
+  await expect(page.getByLabel("Search tool")).toHaveValue("perplexity-search");
+  await expect(page.getByLabel("Planner model")).toHaveValue("deepseek-v4-flash");
   await expect(page.getByLabel("CPF redaction")).toBeChecked();
   await page.getByPlaceholder("Production app").fill("Edited key");
   await page.getByLabel("Block key").check();
@@ -200,7 +221,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     blocked: true,
     models: ["deepseek-v4-flash"],
     metadata: {
-      huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] }
+      huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
+      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 }
     },
     prompt_policy_ids: selectedPolicyIds
   });
@@ -210,6 +232,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Budget USD")).toHaveValue("25");
   await expect(page.getByLabel("Max TPS")).toHaveValue("2");
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
+  await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
   await expect(page.getByLabel("CPF redaction")).toBeChecked();
   await page.getByRole("dialog").getByRole("button", { name: "Clone key" }).click();
   await expect(page.getByText("sk-test-clone")).toBeVisible();
@@ -222,7 +245,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     blocked: false,
     models: ["deepseek-v4-flash"],
     metadata: {
-      huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] }
+      huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
+      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 }
     },
     prompt_policy_ids: selectedPolicyIds
   });
@@ -258,7 +282,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
             models: ["glm-test"],
             metadata: {
               huawei_token_budget: { max_tokens: 25000, reset_duration: "1d", counts: "total_tokens" },
-              huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2, 3], start: "08:00", end: "18:00" }] }
+              huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2, 3], start: "08:00", end: "18:00" }] },
+              huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", planner_model: "glm-test", max_results: 4, max_queries: 1 }
             },
             blocked: false
           }]
@@ -334,7 +359,13 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("Restrict access by schedule").check();
   await expect(page.getByLabel("Access timezone")).toHaveValue("America/Sao_Paulo");
   await page.getByLabel("Limit daily hours").check();
-  await page.getByLabel("glm-test").check();
+  await page.getByLabel("Enable web search augmentation").check();
+  await page.getByLabel("Search mode").selectOption("automatic");
+  await page.getByLabel("Search tool").selectOption("perplexity-search");
+  await page.getByLabel("Planner model").selectOption("glm-test");
+  await page.getByLabel("Max results").fill("4");
+  await page.getByLabel("Max queries").fill("1");
+  await page.getByRole("checkbox", { name: "glm-test" }).check();
   await page.getByLabel("CPF redaction").check();
   await page.getByRole("dialog").getByRole("button", { name: "Create team" }).click();
   expect(teamCreatePayload).toMatchObject({
@@ -345,7 +376,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     max_parallel_requests: 3,
     metadata: {
       huawei_token_budget: { max_tokens: 30000, reset_duration: "30d", counts: "total_tokens" },
-      huawei_time_access: { timezone: "America/Sao_Paulo", rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }] }
+      huawei_time_access: { timezone: "America/Sao_Paulo", rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }] },
+      huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", planner_model: "glm-test", max_results: 4, max_queries: 1 }
     },
     models: ["glm-test"],
     prompt_policy_ids: ["policy-cpf"]
@@ -361,6 +393,9 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Max parallel")).toHaveValue("4");
   await expect(page.getByLabel("Total token quota")).toHaveValue("25000");
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
+  await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
+  await expect(page.getByLabel("Search mode")).toHaveValue("automatic");
+  await expect(page.getByLabel("Max results")).toHaveValue("4");
   await expect(page.getByLabel("CPF redaction")).not.toBeChecked();
   await page.getByLabel("CPF redaction").check();
   await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();

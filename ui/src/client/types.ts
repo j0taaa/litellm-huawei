@@ -3,6 +3,17 @@ import type { PromptPolicyRule } from "../shared/types";
 export type RoutePath = "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/skills" | "/image-support" | "/search-tools" | "/test" | `/stats/keys/${string}` | `/stats/teams/${string}`;
 export type Tone = "green" | "blue" | "amber" | "violet" | "rose";
 export type DurationUnit = "m" | "h" | "d";
+export type WebSearchMode = "trigger" | "automatic";
+
+export type WebSearchFormState = {
+  enabled: boolean;
+  mode: WebSearchMode;
+  searchToolName: string;
+  plannerModel: string;
+  trigger: string;
+  maxResults: number;
+  maxQueries: number;
+};
 
 export type KeyFormState = {
   key_alias: string;
@@ -32,6 +43,7 @@ export type KeyFormState = {
   models: string[];
   policyIds: string[];
   skillIds: string[];
+  webSearch: WebSearchFormState;
 };
 
 export type TeamFormState = {
@@ -58,6 +70,7 @@ export type TeamFormState = {
   models: string[];
   policyIds: string[];
   skillIds: string[];
+  webSearch: WebSearchFormState;
 };
 
 export type ModelFormState = {

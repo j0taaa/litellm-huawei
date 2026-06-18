@@ -21,6 +21,7 @@ from huawei_litellm.prompt_policies import PromptPolicyBlocked, apply_prompt_pol
 from huawei_litellm.prompt_skills import apply_prompt_skills
 from huawei_litellm.time_access import is_time_access_allowed, time_access_from_metadata
 from huawei_litellm.token_budget import estimate_request_tokens, parse_duration, token_budget_from_metadata
+from huawei_litellm.web_search import WebSearchError, apply_web_search
 
 
 class HuaweiMaaSCostLogger(CustomLogger):
@@ -62,6 +63,18 @@ class HuaweiMaaSCostLogger(CustomLogger):
             raise HTTPException(
                 status_code=502 if str(exc).startswith("image_extraction_failed") else 400,
                 detail={"error": str(exc)},
+            ) from exc
+
+        try:
+            data = await apply_web_search(
+                data,
+                team_metadata=team_metadata,
+                key_metadata=auth_metadata,
+            )
+        except WebSearchError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "web_search_failed", "message": str(exc)},
             ) from exc
 
         data = apply_prompt_skills(data, auth_metadata)

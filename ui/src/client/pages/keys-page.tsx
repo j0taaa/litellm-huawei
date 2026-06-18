@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { CalendarClock, Copy, KeyRound, Pencil, Plus, Power, RefreshCcw, Trash2 } from "lucide-react";
-import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptSkill, TeamRow } from "../../shared/types";
+import type { ApiKeyListRow, ApiKeyRow, ModelInfo, PromptPolicy, PromptSkill, SearchTool, TeamRow } from "../../shared/types";
 import { api, useResource } from "../api";
 import { EmptyState, Header, Modal, StatusBadge } from "../components";
 import { defaultKeyForm, keyFormFromRow, keyIdentifier, keyPayload, normalizeKeyRow, timezones, weekDays } from "../form-state";
 import type { DurationUnit, KeyFormState } from "../types";
 import { currency, mask, toggleValue } from "../utils";
+import { WebSearchControls } from "../web-search-controls";
 
 export function KeysPage() {
   const { data, loading, reload } = useResource<{ keys?: ApiKeyListRow[]; data?: ApiKeyListRow[] }>("/api/keys?page=1&size=100");
@@ -13,6 +14,7 @@ export function KeysPage() {
   const teamsResource = useResource<TeamRow[] | { teams?: TeamRow[]; data?: TeamRow[] }>("/api/teams");
   const policiesResource = useResource<{ policies: PromptPolicy[] }>("/api/prompt-policies");
   const skillsResource = useResource<{ skills: PromptSkill[] }>("/api/skills");
+  const searchToolsResource = useResource<{ search_tools?: SearchTool[] }>("/api/search-tools");
   const [createdKey, setCreatedKey] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<ApiKeyListRow | null>(null);
@@ -26,6 +28,7 @@ export function KeysPage() {
   const teams = Array.isArray(teamsResource.data) ? teamsResource.data : teamsResource.data?.teams || teamsResource.data?.data || [];
   const policies = policiesResource.data?.policies || [];
   const skills = skillsResource.data?.skills || [];
+  const searchTools = searchToolsResource.data?.search_tools || [];
   const scheduleInvalid = form.accessSchedule && form.accessDays.length === 0;
 
   async function submitKey(event: React.FormEvent) {
@@ -292,6 +295,12 @@ export function KeysPage() {
                   <p className="field-note compact">This key can be used at any time.</p>
                 )}
               </fieldset>
+              <WebSearchControls
+                value={form.webSearch}
+                onChange={(webSearch) => setForm({ ...form, webSearch })}
+                searchTools={searchTools}
+                models={models.data?.data || []}
+              />
               <fieldset className="model-access">
                 <div className="model-access-header">
                   <span className="field-label">Model access</span>
