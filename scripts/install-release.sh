@@ -108,6 +108,7 @@ write_env_file() {
   postgres_password="${POSTGRES_PASSWORD:-}"
   host_port="${HOST_PORT:-4000}"
   ui_port="${UI_PORT:-3002}"
+  ui_body_limit_mb="${UI_BODY_LIMIT_MB:-25}"
   catalog_url="${CATALOG_URL:-https://catalog.hwctools.site/models}"
   litellm_log="${LITELLM_LOG:-INFO}"
   postgres_db="${POSTGRES_DB:-litellm}"
@@ -134,6 +135,7 @@ write_env_file() {
 
   host_port="$(prompt "LiteLLM API host port" "$host_port")"
   ui_port="$(prompt "Huawei LiteLLM UI host port" "$ui_port")"
+  ui_body_limit_mb="$(prompt "Huawei LiteLLM UI request body limit in MB" "$ui_body_limit_mb")"
   catalog_url="$(prompt "Huawei MaaS catalog URL" "$catalog_url")"
   litellm_log="$(prompt "LiteLLM log level" "$litellm_log")"
   postgres_db="$(prompt "Postgres database name" "$postgres_db")"
@@ -149,6 +151,7 @@ POSTGRES_PASSWORD=$postgres_password
 
 HOST_PORT=$host_port
 UI_PORT=$ui_port
+UI_BODY_LIMIT_MB=$ui_body_limit_mb
 CATALOG_URL=$catalog_url
 LITELLM_LOG=$litellm_log
 POSTGRES_DB=$postgres_db

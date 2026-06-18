@@ -107,6 +107,7 @@ services:
     environment:
       NODE_ENV: production
       UI_PORT: 3001
+      UI_BODY_LIMIT_MB: ${UI_BODY_LIMIT_MB:-25}
       LITELLM_BASE_URL: http://litellm:4000
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-huawei-maas-local}
       UI_DATABASE_URL: postgresql://${POSTGRES_USER:-litellm}:${POSTGRES_PASSWORD:-litellm-password-change-me}@db:5432/${POSTGRES_DB:-litellm}

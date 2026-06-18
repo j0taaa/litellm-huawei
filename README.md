@@ -68,7 +68,7 @@ Optional:
 - `HUAWEI_TOKEN_BUDGET_DEFAULT_COMPLETION_RESERVE`: estimated completion-token reservation when a request does not set `max_tokens`, default `4096`.
 - `HUAWEI_TOKEN_BUDGET_RESERVATION_TTL_SECONDS`: cleanup age for stale in-flight token reservations, default `3600`.
 - `POSTGRES_DB`, `POSTGRES_USER`: Postgres database/user names.
-- `UI_PORT`, `UI_SESSION_SECRET`, `UI_SECURE_COOKIES`: simple UI bind port and session cookie settings.
+- `UI_PORT`, `UI_BODY_LIMIT_MB`, `UI_SESSION_SECRET`, `UI_SECURE_COOKIES`: simple UI bind port, maximum JSON request size for image tests, and session cookie settings.
 
 ## Key Access Schedules
 

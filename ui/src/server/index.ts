@@ -20,7 +20,7 @@ const litellm = new LiteLLMClient(config.litellmBaseUrl);
 const promptPolicies = new PromptPolicyStore(config.databaseUrl, litellm);
 const promptSkills = new PromptSkillStore(config.databaseUrl, litellm);
 const imageSupport = new ImageSupportStore(config.databaseUrl);
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: true, bodyLimit: config.bodyLimitBytes });
 const sessionCookie = "maas_ui_session";
 
 await app.register(cookie);
