@@ -104,4 +104,11 @@ export type SkillFormState = {
 export type TestChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
+  imageCount?: number;
+};
+
+export type TestImageAttachment = {
+  id: string;
+  name: string;
+  dataUrl: string;
 };

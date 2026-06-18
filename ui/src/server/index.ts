@@ -301,12 +301,25 @@ app.put("/api/image-support", async (request, reply) => {
 
 app.post("/api/test/chat", async (request, reply) => {
   await requireSession(request, reply);
+  const messageContentSchema = z.union([
+    z.string(),
+    z.array(z.union([
+      z.object({ type: z.literal("text"), text: z.string() }),
+      z.object({
+        type: z.literal("image_url"),
+        image_url: z.union([
+          z.string(),
+          z.object({ url: z.string().min(1), detail: z.string().optional() })
+        ])
+      })
+    ])).min(1)
+  ]);
   const body = z.object({
     api_key: z.string().min(1),
     model: z.string().min(1),
     messages: z.array(z.object({
       role: z.enum(["system", "user", "assistant"]),
-      content: z.string()
+      content: messageContentSchema
     })).min(1),
     max_tokens: z.number().int().min(1).max(8192).optional()
   }).parse(request.body || {});

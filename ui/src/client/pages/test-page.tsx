@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { MessageSquare, Send } from "lucide-react";
+import { ImagePlus, MessageSquare, Send, X } from "lucide-react";
 import type { ApiKeyListRow, ModelInfo } from "../../shared/types";
 import { api, useResource } from "../api";
 import { EmptyState, Header } from "../components";
 import { keyIdentifier, normalizeKeyRow } from "../form-state";
-import type { TestChatMessage } from "../types";
+import type { TestChatMessage, TestImageAttachment } from "../types";
 import { chatResponseText } from "../utils";
 
 export function TestPage() {
@@ -17,6 +17,7 @@ export function TestPage() {
   const [model, setModel] = useState("");
   const [maxTokens, setMaxTokens] = useState("512");
   const [prompt, setPrompt] = useState("");
+  const [images, setImages] = useState<TestImageAttachment[]>([]);
   const [messages, setMessages] = useState<TestChatMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -38,22 +39,52 @@ export function TestPage() {
     setApiKey(value);
   }
 
+  async function attachImages(files: FileList | null) {
+    if (!files?.length) return;
+    const selected = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    const attachments = await Promise.all(selected.map(async (file) => ({
+      id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
+      name: file.name,
+      dataUrl: await fileToDataUrl(file)
+    })));
+    setImages((current) => [...current, ...attachments]);
+  }
+
+  function removeImage(id: string) {
+    setImages((current) => current.filter((image) => image.id !== id));
+  }
+
   async function sendPrompt(event: React.FormEvent) {
     event.preventDefault();
     const content = prompt.trim();
-    if (!content || !apiKey || !model) return;
-    const nextMessages: TestChatMessage[] = [...messages, { role: "user", content }];
+    if ((!content && !images.length) || !apiKey || !model) return;
+    const currentImages = images;
+    const displayContent = content || "Image-only prompt";
+    const nextMessages: TestChatMessage[] = [...messages, { role: "user", content: displayContent, imageCount: currentImages.length || undefined }];
     setMessages(nextMessages);
     setPrompt("");
+    setImages([]);
     setSending(true);
     setError("");
     try {
+      const requestMessages = [
+        ...messages.map(({ role, content }) => ({ role, content })),
+        {
+          role: "user",
+          content: currentImages.length
+            ? [
+              ...(content ? [{ type: "text", text: content }] : []),
+              ...currentImages.map((image) => ({ type: "image_url", image_url: { url: image.dataUrl } }))
+            ]
+            : content
+        }
+      ];
       const result = await api<Record<string, unknown>>("/api/test/chat", {
         method: "POST",
         body: {
           api_key: apiKey,
           model,
-          messages: nextMessages.map(({ role, content }) => ({ role, content })),
+          messages: requestMessages,
           max_tokens: Number(maxTokens) || 512
         }
       });
@@ -96,15 +127,44 @@ export function TestPage() {
             <div className={`chat-message ${message.role}`} key={index}>
               <span>{message.role}</span>
               <p>{message.content}</p>
+              {message.imageCount ? <small>{message.imageCount} image{message.imageCount === 1 ? "" : "s"} attached</small> : null}
             </div>
           )) : <EmptyState text="No test messages yet" />}
         </div>
         {error ? <div className="error">{error}</div> : null}
         <form className="chat-composer" onSubmit={sendPrompt}>
-          <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Send a test prompt" />
-          <button className="primary" disabled={sending || !prompt.trim() || !apiKey || !model}><Send size={16} /> {sending ? "Sending" : "Send"}</button>
+          <div className="composer-main">
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Send a test prompt" />
+            {images.length ? (
+              <div className="image-attachments">
+                {images.map((image) => (
+                  <div className="image-chip" key={image.id}>
+                    <img src={image.dataUrl} alt={image.name} />
+                    <span>{image.name}</span>
+                    <button type="button" className="icon" title="Remove image" onClick={() => removeImage(image.id)}><X size={14} /></button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="composer-actions">
+            <label className="secondary image-upload">
+              <ImagePlus size={16} /> Images
+              <input type="file" accept="image/*" multiple onChange={(event) => { void attachImages(event.target.files); event.target.value = ""; }} />
+            </label>
+            <button className="primary" disabled={sending || (!prompt.trim() && !images.length) || !apiKey || !model}><Send size={16} /> {sending ? "Sending" : "Send"}</button>
+          </div>
         </form>
       </div>
     </section>
   );
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Failed to read image"));
+    reader.readAsDataURL(file);
+  });
 }

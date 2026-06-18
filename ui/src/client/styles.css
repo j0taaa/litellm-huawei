@@ -527,15 +527,53 @@ td:has(.row-actions) {
   border-radius: 8px;
   background: #fff;
 }
+.chat-message small { color: var(--muted); font-size: 12px; }
 .chat-message.user { justify-self: end; }
 .chat-message.user p { background: var(--green-soft); border-color: #b9ded2; }
 .chat-composer {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: end;
 }
 .chat-composer textarea { min-height: 96px; }
+.composer-main { display: grid; gap: 10px; min-width: 0; }
+.composer-actions { display: grid; gap: 8px; }
+.image-upload { position: relative; overflow: hidden; }
+.image-upload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.image-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.image-chip {
+  max-width: 240px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+.image-chip img {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.image-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
 
 table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d8e1dd; border-radius: 8px; overflow: hidden; }
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #edf2f0; font-size: 13px; vertical-align: middle; }
