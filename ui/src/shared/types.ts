@@ -120,6 +120,35 @@ export type ImageSupportSettings = {
   updated_at?: string | null;
 };
 
+export type SearchToolLiteLLMParams = {
+  search_provider: string;
+  api_key?: string;
+  api_base?: string;
+  timeout?: number;
+  max_retries?: number;
+  [key: string]: unknown;
+};
+
+export type SearchToolInfo = {
+  description?: string;
+  [key: string]: unknown;
+};
+
+export type SearchTool = {
+  search_tool_id?: string;
+  search_tool_name: string;
+  litellm_params: SearchToolLiteLLMParams;
+  search_tool_info?: SearchToolInfo;
+  created_at?: string;
+  updated_at?: string;
+  is_from_config?: boolean;
+};
+
+export type AvailableSearchProvider = {
+  provider_name: string;
+  ui_friendly_name: string;
+};
+
 export type StatsSummary = {
   totals: {
     spend: number;

@@ -494,6 +494,125 @@ test("direct route keeps destination after login", async ({ page }) => {
   await expect(page).toHaveURL(/\/keys$/);
 });
 
+test("manages LiteLLM search tools", async ({ page }) => {
+  let searchTools = [{
+    search_tool_id: "tool-db",
+    search_tool_name: "perplexity-search",
+    litellm_params: { search_provider: "perplexity", api_key: "sk-***", api_base: "https://api.perplexity.ai" },
+    search_tool_info: { description: "Perplexity tool" },
+    created_at: "2026-06-18T12:00:00Z",
+    updated_at: "2026-06-18T12:30:00Z",
+    is_from_config: false
+  }, {
+    search_tool_name: "config-search",
+    litellm_params: { search_provider: "tavily", api_key: "tvly-***" },
+    search_tool_info: { description: "Config tool" },
+    is_from_config: true
+  }];
+  let createPayload: Record<string, any> | undefined;
+  let updatePayload: Record<string, any> | undefined;
+  let testPayload: Record<string, any> | undefined;
+  let deleteUrl = "";
+
+  await page.route("**/api/search-tools/**", async (route) => {
+    const method = route.request().method();
+    if (route.request().url().endsWith("/api/search-tools/providers")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ providers: [{ provider_name: "perplexity", ui_friendly_name: "Perplexity" }, { provider_name: "tavily", ui_friendly_name: "Tavily" }] })
+      });
+      return;
+    }
+    if (route.request().url().endsWith("/api/search-tools/test-connection")) {
+      testPayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "success", message: "Successfully connected", test_query: "test", results_count: 5 }) });
+      return;
+    }
+    if (method === "PUT") {
+      updatePayload = route.request().postDataJSON();
+      searchTools = searchTools.map((tool) => tool.search_tool_id === "tool-db" ? { ...tool, ...updatePayload, updated_at: "2026-06-18T13:00:00Z" } : tool);
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ search_tool_id: "tool-db", ...updatePayload }) });
+      return;
+    }
+    if (method === "DELETE") {
+      deleteUrl = route.request().url();
+      searchTools = searchTools.filter((tool) => tool.search_tool_id !== "tool-db");
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: "deleted" }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route("**/api/search-tools", async (route) => {
+    const method = route.request().method();
+    if (method === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ search_tools: searchTools }) });
+      return;
+    }
+    if (method === "POST") {
+      createPayload = route.request().postDataJSON();
+      searchTools = [{ search_tool_id: "tool-new", created_at: "2026-06-18T14:00:00Z", updated_at: "2026-06-18T14:00:00Z", is_from_config: false, ...createPayload }, ...searchTools];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ search_tool_id: "tool-new", ...createPayload }) });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto("/search-tools");
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("sk-huawei-maas-local");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByRole("heading", { name: "Search Tools" })).toBeVisible();
+  await expect(page).toHaveURL(/\/search-tools$/);
+  await expect(page.getByRole("cell", { name: "perplexity-search" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Perplexity", exact: true })).toBeVisible();
+  await expect(page.getByRole("row", { name: /config-search/ }).getByTitle("Edit search tool")).toBeDisabled();
+  await expect(page.getByRole("row", { name: /config-search/ }).getByTitle("Delete search tool")).toBeDisabled();
+
+  await page.getByRole("button", { name: "Create search tool" }).click();
+  await expect(page.getByRole("dialog", { name: "Create search tool" })).toBeVisible();
+  await page.getByLabel("Search tool name").fill("new search");
+  await page.getByRole("dialog").getByRole("button", { name: "Create search tool" }).click();
+  await expect(page.getByRole("dialog", { name: "Create search tool" })).toBeVisible();
+  expect(createPayload).toBeUndefined();
+  await page.getByLabel("Search tool name").fill("new-search");
+  await page.getByLabel("Search provider").selectOption("perplexity");
+  await page.getByLabel("API key").fill("pplx-test");
+  await page.getByLabel("API base").fill("https://api.perplexity.ai");
+  await page.getByLabel("Timeout seconds").fill("12.5");
+  await page.getByLabel("Max retries").fill("2");
+  await page.getByLabel("Description").fill("Search for testing");
+  await page.getByRole("button", { name: "Test connection" }).click();
+  await expect(page.getByText("Connection successful")).toBeVisible();
+  expect(testPayload).toMatchObject({
+    litellm_params: { search_provider: "perplexity", api_key: "pplx-test", api_base: "https://api.perplexity.ai", timeout: 12.5, max_retries: 2 }
+  });
+  await page.getByRole("dialog").getByRole("button", { name: "Create search tool" }).click();
+  expect(createPayload).toMatchObject({
+    search_tool_name: "new-search",
+    litellm_params: { search_provider: "perplexity", api_key: "pplx-test", api_base: "https://api.perplexity.ai", timeout: 12.5, max_retries: 2 },
+    search_tool_info: { description: "Search for testing" }
+  });
+  await expect(page.getByRole("cell", { name: "new-search" })).toBeVisible();
+
+  await page.getByRole("row", { name: /perplexity-search/ }).getByTitle("Edit search tool").click();
+  await expect(page.getByRole("dialog", { name: "Edit search tool" })).toBeVisible();
+  await expect(page.getByLabel("Search tool name")).toHaveValue("perplexity-search");
+  await expect(page.getByLabel("Search provider")).toHaveValue("perplexity");
+  await page.getByLabel("Search tool name").fill("edited-search");
+  await page.getByLabel("Description").fill("Edited description");
+  await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
+  expect(updatePayload).toMatchObject({
+    search_tool_name: "edited-search",
+    litellm_params: { search_provider: "perplexity", api_base: "https://api.perplexity.ai" },
+    search_tool_info: { description: "Edited description" }
+  });
+
+  await page.getByRole("row", { name: /edited-search/ }).getByTitle("Delete search tool").click();
+  await expect.poll(() => deleteUrl).toContain("/api/search-tools/tool-db");
+});
+
 test("opens key and team stats from stats breakdown with paginated logs", async ({ page }) => {
   const recent = Array.from({ length: 12 }, (_, index) => ({
     startTime: `2026-06-12T18:${String(index).padStart(2, "0")}:00Z`,

@@ -299,6 +299,68 @@ app.put("/api/image-support", async (request, reply) => {
   return imageSupport.update(imageSupportInputSchema.parse(request.body || {}));
 });
 
+const searchToolSchema = z.object({
+  search_tool_name: z.string().min(1),
+  litellm_params: z.object({
+    search_provider: z.string().min(1),
+    api_key: z.string().optional(),
+    api_base: z.string().optional(),
+    timeout: z.number().positive().optional(),
+    max_retries: z.number().int().min(0).optional()
+  }).passthrough(),
+  search_tool_info: z.object({
+    description: z.string().optional()
+  }).passthrough().optional()
+});
+
+app.get("/api/search-tools", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  return litellm.request("/search_tools/list", session.litellmKey);
+});
+
+app.get("/api/search-tools/providers", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  return litellm.request("/search_tools/ui/available_providers", session.litellmKey);
+});
+
+app.post("/api/search-tools", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const searchTool = searchToolSchema.parse(request.body || {});
+  return litellm.request("/search_tools", session.litellmKey, {
+    method: "POST",
+    body: JSON.stringify({ search_tool: searchTool })
+  });
+});
+
+app.put("/api/search-tools/:searchToolId", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ searchToolId: z.string().min(1) }).parse(request.params);
+  const searchTool = searchToolSchema.parse(request.body || {});
+  return litellm.request(`/search_tools/${encodeURIComponent(params.searchToolId)}`, session.litellmKey, {
+    method: "PUT",
+    body: JSON.stringify({ search_tool: searchTool })
+  });
+});
+
+app.delete("/api/search-tools/:searchToolId", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const params = z.object({ searchToolId: z.string().min(1) }).parse(request.params);
+  return litellm.request(`/search_tools/${encodeURIComponent(params.searchToolId)}`, session.litellmKey, {
+    method: "DELETE"
+  });
+});
+
+app.post("/api/search-tools/test-connection", async (request, reply) => {
+  const session = await requireSession(request, reply);
+  const body = z.object({
+    litellm_params: searchToolSchema.shape.litellm_params
+  }).parse(request.body || {});
+  return litellm.request("/search_tools/test_connection", session.litellmKey, {
+    method: "POST",
+    body: JSON.stringify(body)
+  });
+});
+
 app.post("/api/test/chat", async (request, reply) => {
   await requireSession(request, reply);
   const messageContentSchema = z.union([

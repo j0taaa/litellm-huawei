@@ -1,6 +1,6 @@
 import type { PromptPolicyRule } from "../shared/types";
 
-export type RoutePath = "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/skills" | "/image-support" | "/test" | `/stats/keys/${string}` | `/stats/teams/${string}`;
+export type RoutePath = "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/skills" | "/image-support" | "/search-tools" | "/test" | `/stats/keys/${string}` | `/stats/teams/${string}`;
 export type Tone = "green" | "blue" | "amber" | "violet" | "rose";
 export type DurationUnit = "m" | "h" | "d";
 
