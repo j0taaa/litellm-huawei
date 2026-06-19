@@ -1,0 +1,43 @@
+services:
+  litellm:
+    ports: !reset []
+    environment:
+      UI_USERNAME: ${UI_USERNAME:-admin}
+      UI_PASSWORD: ${UI_PASSWORD}
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=home_web
+      - traefik.http.routers.demo-litellm.rule=Host(`demo-litellm.hwctools.site`)
+      - traefik.http.routers.demo-litellm.entrypoints=websecure
+      - traefik.http.routers.demo-litellm.tls.certresolver=le
+      - traefik.http.routers.demo-litellm.service=demo-litellm
+      - traefik.http.routers.demo-litellm-port.rule=Host(`demo-litellm.hwctools.site`) || Host(`demo-huawei-litellm-ui.hwctools.site`)
+      - traefik.http.routers.demo-litellm-port.entrypoints=litellm
+      - traefik.http.routers.demo-litellm-port.tls.certresolver=le
+      - traefik.http.routers.demo-litellm-port.service=demo-litellm
+      - traefik.http.services.demo-litellm.loadbalancer.server.port=4000
+    networks:
+      default:
+        aliases:
+          - demo-litellm-internal
+      web:
+
+  maas-ui:
+    ports: !reset []
+    environment:
+      LITELLM_BASE_URL: http://demo-litellm-internal:4000
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=home_web
+      - traefik.http.routers.demo-huawei-litellm-ui.rule=Host(`demo-huawei-litellm-ui.hwctools.site`)
+      - traefik.http.routers.demo-huawei-litellm-ui.entrypoints=websecure
+      - traefik.http.routers.demo-huawei-litellm-ui.tls.certresolver=le
+      - traefik.http.services.demo-huawei-litellm-ui.loadbalancer.server.port=3001
+    networks:
+      - default
+      - web
+
+networks:
+  web:
+    external: true
+    name: home_web

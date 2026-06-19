@@ -1,10 +1,10 @@
 __pycache__/
 .pytest_cache/
 .env
+.env*.local
 generated/*
 !generated/.gitkeep
 ui/node_modules/
 ui/dist/
 ui/test-results/
 ui/playwright-report/
-
