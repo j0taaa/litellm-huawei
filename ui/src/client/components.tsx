@@ -64,7 +64,10 @@ export function StatsCharts({ spendTitle, spendRows, modelRows, keyRows }: { spe
 export function UsageOverTimeCharts({ rows, controls }: { rows: StatsTimeSeriesRow[]; controls?: React.ReactNode }) {
   return (
     <section className="time-charts-section" aria-label="Usage over time">
-      {controls ? <div className="time-charts-controls">{controls}</div> : null}
+      <div className="time-charts-head">
+        <PanelTitle icon={<TrendingUp size={16} />} title="Usage over time" />
+        {controls ? <div className="time-charts-controls">{controls}</div> : null}
+      </div>
       <div className="chart-grid time-chart-grid">
         <LineChart title="Spend over time" rows={rows} valueKey="spend" color="#14745f" formatValue={currency} />
         <LineChart title="Requests over time" rows={rows} valueKey="requests" color="#2563eb" formatValue={(value) => String(Math.round(value))} />

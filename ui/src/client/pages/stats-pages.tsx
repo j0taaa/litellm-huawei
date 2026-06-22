@@ -10,14 +10,18 @@ export function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => voi
   const [timeframe, setTimeframe] = useState<StatsTimeframe>("7d");
   const [bucket, setBucket] = useState<StatsTimeBucket>("day");
   const query = statsQuery(timeframe, bucket);
-  const { data, loading, reload } = useResource<StatsSummary>(`/api/stats?${query}`);
+  const { data, loading, reload } = useResource<StatsSummary>("/api/stats");
+  const { data: timeData, reload: reloadTimeData } = useResource<StatsSummary>(`/api/stats?${query}`);
   return (
     <section>
       <Header
         icon={<BarChart3 size={22} />}
         title="Stats"
         tone="green"
-        action={<div className="header-actions"><StatsActions exportHref={`/api/stats/export.csv?${query}`} onRefresh={reload} /></div>}
+        action={<div className="header-actions"><StatsActions exportHref="/api/stats/export.csv" onRefresh={() => {
+          reload();
+          reloadTimeData();
+        }} /></div>}
       />
       {loading || !data ? <EmptyState text="Loading stats" /> : (
         <>
@@ -28,12 +32,6 @@ export function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => voi
             <Metric icon={<Users size={18} />} tone="violet" label="Teams" value={String(data.totals.teams)} />
             <Metric icon={<Layers3 size={18} />} tone="rose" label="Models" value={String(data.totals.models)} />
           </div>
-          <UsageOverTimeCharts rows={data.timeSeries || []} controls={
-            <StatsTimeframeControls timeframe={timeframe} bucket={bucket} onTimeframeChange={(next) => {
-              setTimeframe(next);
-              setBucket(defaultBucket(next));
-            }} onBucketChange={setBucket} />
-          } />
           <StatsCharts spendTitle="Spend by team" spendRows={data.byTeam} modelRows={data.byModel} keyRows={data.byKey} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="By model" rows={data.byModel} />
@@ -41,6 +39,12 @@ export function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => voi
             <Breakdown icon={<Users size={16} />} tone="violet" title="By team" rows={data.byTeam} onRowClick={(row) => onNavigate(`/stats/teams/${encodeURIComponent(row.id || row.name)}`)} />
           </div>
           <PaginatedDataTable icon={<Activity size={16} />} title="Recent spend logs" rows={data.recent} columns={["startTime", "model", "api_key", "team_id", "spend"]} />
+          <UsageOverTimeCharts rows={timeData?.timeSeries || []} controls={
+            <StatsTimeframeControls timeframe={timeframe} bucket={bucket} onTimeframeChange={(next) => {
+              setTimeframe(next);
+              setBucket(defaultBucket(next));
+            }} onBucketChange={setBucket} />
+          } />
         </>
       )}
     </section>

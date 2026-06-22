@@ -207,11 +207,22 @@ td:has(.row-actions) {
 .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
 .chart-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .chart-panel { min-height: 230px; }
-.time-charts-section { margin-bottom: 14px; }
+.time-charts-section {
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid #dce6e1;
+}
+.time-charts-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+  margin: 0 0 12px;
+}
 .time-charts-controls {
   display: flex;
   justify-content: flex-end;
-  margin: 0 0 10px;
+  margin: 0;
 }
 .time-chart-grid { grid-template-columns: repeat(2, minmax(320px, 1fr)); }
 .time-chart-panel { min-height: 260px; }
@@ -658,6 +669,7 @@ code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
   .nav { justify-content: center; }
   .account { display: none; }
   .metrics, .grid3, .toolbar, .chart-grid, .donut-layout { grid-template-columns: 1fr; }
+  .time-charts-head { align-items: stretch; flex-direction: column; }
   .time-charts-controls { justify-content: flex-start; }
   .stats-controls, .stats-controls label { width: 100%; max-width: none; }
   .donut-chart { justify-self: center; }

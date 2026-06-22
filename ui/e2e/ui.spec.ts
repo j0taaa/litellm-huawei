@@ -690,12 +690,12 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
   await expect(page.getByRole("img", { name: "Spend by model %" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Spend by key" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Requests by model" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv?timeframe=7d&bucket=day");
+  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv");
   await page.getByLabel("Timeframe").selectOption("30d");
   await expect(page.getByLabel("Group by")).toHaveValue("day");
-  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv?timeframe=30d&bucket=day");
+  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv");
   await page.getByLabel("Group by").selectOption("week");
-  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv?timeframe=30d&bucket=week");
+  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv");
   await expect(page.getByText("1-10 of 12")).toBeVisible();
   await expect(page.getByText("Page 1 of 2")).toBeVisible();
   await page.getByRole("button", { name: "Next" }).click();
