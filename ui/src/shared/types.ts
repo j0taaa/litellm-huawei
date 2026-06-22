@@ -160,6 +160,13 @@ export type StatsSummary = {
   byModel: StatsBreakdownRow[];
   byKey: StatsBreakdownRow[];
   byTeam: StatsBreakdownRow[];
+  timeSeries: StatsTimeSeriesRow[];
+  range: {
+    timeframe: StatsTimeframe;
+    bucket: StatsTimeBucket;
+    start: string | null;
+    end: string | null;
+  };
   recentTotal?: number;
   recent: Array<Record<string, unknown>>;
 };
@@ -169,4 +176,17 @@ export type StatsBreakdownRow = {
   name: string;
   spend: number;
   requests: number;
+};
+
+export type StatsTimeframe = "24h" | "7d" | "30d" | "90d" | "all";
+export type StatsTimeBucket = "hour" | "day" | "week" | "month";
+
+export type StatsTimeSeriesRow = {
+  label: string;
+  start: string;
+  spend: number;
+  requests: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
 };

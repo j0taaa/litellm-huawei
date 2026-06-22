@@ -1,20 +1,28 @@
+import { useState } from "react";
 import { Activity, BarChart3, DollarSign, KeyRound, Layers3, Users } from "lucide-react";
-import type { StatsSummary } from "../../shared/types";
+import type { StatsSummary, StatsTimeBucket, StatsTimeframe } from "../../shared/types";
 import { useResource } from "../api";
-import { Breakdown, EmptyState, Header, Metric, PaginatedDataTable, StatsActions, StatsCharts } from "../components";
+import { Breakdown, EmptyState, Header, Metric, PaginatedDataTable, StatsActions, StatsCharts, UsageOverTimeCharts } from "../components";
 import type { RoutePath } from "../types";
 import { currency } from "../utils";
 
 export function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => void }) {
-  const { data, loading, reload } = useResource<StatsSummary>("/api/stats");
+  const [timeframe, setTimeframe] = useState<StatsTimeframe>("7d");
+  const [bucket, setBucket] = useState<StatsTimeBucket>("day");
+  const query = statsQuery(timeframe, bucket);
+  const { data, loading, reload } = useResource<StatsSummary>(`/api/stats?${query}`);
   return (
     <section>
       <Header
         icon={<BarChart3 size={22} />}
         title="Stats"
         tone="green"
-        action={<div className="header-actions"><StatsActions exportHref="/api/stats/export.csv" onRefresh={reload} /></div>}
+        action={<div className="header-actions"><StatsActions exportHref={`/api/stats/export.csv?${query}`} onRefresh={reload} /></div>}
       />
+      <StatsTimeframeControls timeframe={timeframe} bucket={bucket} onTimeframeChange={(next) => {
+        setTimeframe(next);
+        setBucket(defaultBucket(next));
+      }} onBucketChange={setBucket} />
       {loading || !data ? <EmptyState text="Loading stats" /> : (
         <>
           <div className="metrics">
@@ -24,6 +32,7 @@ export function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => voi
             <Metric icon={<Users size={18} />} tone="violet" label="Teams" value={String(data.totals.teams)} />
             <Metric icon={<Layers3 size={18} />} tone="rose" label="Models" value={String(data.totals.models)} />
           </div>
+          <UsageOverTimeCharts rows={data.timeSeries || []} />
           <StatsCharts spendTitle="Spend by team" spendRows={data.byTeam} modelRows={data.byModel} keyRows={data.byKey} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="By model" rows={data.byModel} />
@@ -35,6 +44,51 @@ export function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => voi
       )}
     </section>
   );
+}
+
+function StatsTimeframeControls({
+  timeframe,
+  bucket,
+  onTimeframeChange,
+  onBucketChange
+}: {
+  timeframe: StatsTimeframe;
+  bucket: StatsTimeBucket;
+  onTimeframeChange: (value: StatsTimeframe) => void;
+  onBucketChange: (value: StatsTimeBucket) => void;
+}) {
+  return (
+    <div className="stats-controls">
+      <label>Timeframe
+        <select value={timeframe} onChange={(event) => onTimeframeChange(event.target.value as StatsTimeframe)}>
+          <option value="24h">Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+          <option value="90d">Last 90 days</option>
+          <option value="all">All time</option>
+        </select>
+      </label>
+      <label>Group by
+        <select value={bucket} onChange={(event) => onBucketChange(event.target.value as StatsTimeBucket)}>
+          <option value="hour">Hour</option>
+          <option value="day">Day</option>
+          <option value="week">Week</option>
+          <option value="month">Month</option>
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function statsQuery(timeframe: StatsTimeframe, bucket: StatsTimeBucket): string {
+  return new URLSearchParams({ timeframe, bucket }).toString();
+}
+
+function defaultBucket(timeframe: StatsTimeframe): StatsTimeBucket {
+  if (timeframe === "24h") return "hour";
+  if (timeframe === "90d") return "week";
+  if (timeframe === "all") return "month";
+  return "day";
 }
 
 export function KeyStatsPage({ keyId, onBack }: { keyId: string; onBack: () => void }) {

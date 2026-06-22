@@ -13,7 +13,7 @@ import { syncHuaweiModels } from "./model-sync.js";
 import { PromptPolicyStore, assignmentInputSchema, keyIdentifier, policyInputSchema } from "./prompt-policies.js";
 import { PromptSkillStore, skillAssignmentInputSchema, skillInputSchema } from "./prompt-skills.js";
 import { signSession, verifyLiteLLMToken, verifySession, type UiSession } from "./session.js";
-import { filterSpendLogsByKey, filterSpendLogsByTeam, spendLogsToCsv, summarizeStats } from "./stats.js";
+import { filterSpendLogsByKey, filterSpendLogsByTeam, filterSpendLogsByTimeframe, spendLogsToCsv, statsQueryOptions, summarizeStats } from "./stats.js";
 
 const config = loadConfig();
 const litellm = new LiteLLMClient(config.litellmBaseUrl);
@@ -406,12 +406,14 @@ app.post("/api/test/chat", async (request, reply) => {
 
 app.get("/api/stats", async (request, reply) => {
   const session = await requireSession(request, reply);
-  const { logs, keys, teams, models } = await fetchStatsInputs(session, request.query);
+  const { logs, keys, teams, models, timeframe, bucket } = await fetchStatsInputs(session, request.query);
   return summarizeStats({
     spendLogs: logs,
     keys,
     teams,
-    models
+    models,
+    timeframe,
+    bucket
   });
 });
 
@@ -424,12 +426,14 @@ app.get("/api/stats/export.csv", async (request, reply) => {
 app.get("/api/stats/keys/:key", async (request, reply) => {
   const session = await requireSession(request, reply);
   const params = z.object({ key: z.string().min(1) }).parse(request.params);
-  const { logs, keys, teams, models } = await fetchStatsInputs(session, request.query);
+  const { logs, keys, teams, models, timeframe, bucket } = await fetchStatsInputs(session, request.query);
   return summarizeStats({
     spendLogs: filterSpendLogsByKey(logs, params.key),
     keys,
     teams,
-    models
+    models,
+    timeframe,
+    bucket
   });
 });
 
@@ -443,12 +447,14 @@ app.get("/api/stats/keys/:key/export.csv", async (request, reply) => {
 app.get("/api/stats/teams/:teamId", async (request, reply) => {
   const session = await requireSession(request, reply);
   const params = z.object({ teamId: z.string().min(1) }).parse(request.params);
-  const { logs, keys, teams, models } = await fetchStatsInputs(session, request.query);
+  const { logs, keys, teams, models, timeframe, bucket } = await fetchStatsInputs(session, request.query);
   return summarizeStats({
     spendLogs: filterSpendLogsByTeam(logs, params.teamId),
     keys,
     teams,
-    models
+    models,
+    timeframe,
+    bucket
   });
 });
 
@@ -499,19 +505,24 @@ async function fetchStatsInputs(session: UiSession, rawQuery: unknown): Promise<
   keys: Array<Record<string, unknown>>;
   teams: Array<Record<string, unknown>>;
   models: Array<Record<string, unknown>>;
+  timeframe: ReturnType<typeof statsQueryOptions>["timeframe"];
+  bucket: ReturnType<typeof statsQueryOptions>["bucket"];
 }> {
-  const query = new URLSearchParams(rawQuery as Record<string, string>);
+  const { timeframe, bucket, passthrough } = statsQueryOptions(rawQuery);
   const [logs, keys, teams, models] = await Promise.all([
-    litellm.request<unknown>(`/spend/logs?${query.toString()}`, session.litellmKey),
+    litellm.request<unknown>(`/spend/logs?${passthrough.toString()}`, session.litellmKey),
     litellm.request<unknown>("/key/list?page=1&size=100&return_full_object=true", session.litellmKey),
     litellm.request<unknown>("/team/list", session.litellmKey),
     litellm.request<unknown>("/model/info", session.litellmKey)
   ]);
+  const spendLogs = filterSpendLogsByTimeframe(arrayFrom(logs, "data", "logs", "spend_logs"), timeframe);
   return {
-    logs: arrayFrom(logs, "data", "logs", "spend_logs"),
+    logs: spendLogs,
     keys: arrayFrom(keys, "keys", "data"),
     teams: arrayFrom(teams, "teams", "data"),
-    models: arrayFrom(normalizeModelInfoResponse(models), "data")
+    models: arrayFrom(normalizeModelInfoResponse(models), "data"),
+    timeframe,
+    bucket
   };
 }
 

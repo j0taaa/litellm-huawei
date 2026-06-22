@@ -479,7 +479,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("Safety team").check();
   await page.getByLabel("Delete test").check();
   await page.getByRole("dialog").getByRole("button", { name: "Create policy" }).click();
-  expect(policyCreatePayload).toMatchObject({
+  await expect.poll(() => policyCreatePayload).toMatchObject({
     name: "PII safety",
     enabled: true,
     rules: [{ name: "Email redaction", action: "redact", replacement: "[EMAIL]" }]
@@ -661,6 +661,11 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
     byModel: [{ id: "glm-5.1", name: "glm-5.1", spend: 1.2, requests: 12 }],
     byKey: [{ id: "key-a", name: "Production app", spend: 0.6, requests: 6 }, { id: "key-b", name: "Batch jobs", spend: 0.6, requests: 6 }],
     byTeam: [{ id: "team-a", name: "team-a", spend: 0.6, requests: 6 }, { id: "team-b", name: "team-b", spend: 0.6, requests: 6 }],
+    timeSeries: [
+      { label: "06-11", start: "2026-06-11T00:00:00.000Z", spend: 0.4, requests: 4, prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+      { label: "06-12", start: "2026-06-12T00:00:00.000Z", spend: 0.8, requests: 8, prompt_tokens: 200, completion_tokens: 100, total_tokens: 300 }
+    ],
+    range: { timeframe: "7d", bucket: "day", start: "2026-06-11T00:00:00.000Z", end: "2026-06-12T23:00:00.000Z" },
     recent
   };
   await page.route("**/api/stats**", async (route) => {
@@ -673,11 +678,20 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await expect(page.getByRole("heading", { name: "Stats" })).toBeVisible();
+  await expect(page.getByLabel("Timeframe")).toHaveValue("7d");
+  await expect(page.getByLabel("Group by")).toHaveValue("day");
+  await expect(page.getByRole("img", { name: "Spend over time" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Requests over time" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Spend by team" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Spend by model %" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Spend by key" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Requests by model" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv");
+  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv?timeframe=7d&bucket=day");
+  await page.getByLabel("Timeframe").selectOption("30d");
+  await expect(page.getByLabel("Group by")).toHaveValue("day");
+  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv?timeframe=30d&bucket=day");
+  await page.getByLabel("Group by").selectOption("week");
+  await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/export.csv?timeframe=30d&bucket=week");
   await expect(page.getByText("1-10 of 12")).toBeVisible();
   await expect(page.getByText("Page 1 of 2")).toBeVisible();
   await page.getByRole("button", { name: "Next" }).click();

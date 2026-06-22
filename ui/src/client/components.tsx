@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Activity, DollarSign, Download, RefreshCcw, ShieldCheck, Sparkles, X } from "lucide-react";
-import type { StatsBreakdownRow } from "../shared/types";
+import { Activity, DollarSign, Download, RefreshCcw, ShieldCheck, Sparkles, TrendingUp, X } from "lucide-react";
+import type { StatsBreakdownRow, StatsTimeSeriesRow } from "../shared/types";
 import type { Tone } from "./types";
 import { currency, formatCell } from "./utils";
 
@@ -57,6 +57,71 @@ export function StatsCharts({ spendTitle, spendRows, modelRows, keyRows }: { spe
       <DonutChart title="Spend by model %" rows={modelRows.slice(0, 6).map((row, index) => ({ ...row, color: chartColors[index % chartColors.length] }))} showPercent />
       <SpendBarChart title="Spend by key" rows={keyRows.slice(0, 6)} color="#d97706" />
       <BarChart title="Requests by model" rows={modelRows.slice(0, 6)} color="#2563eb" />
+    </div>
+  );
+}
+
+export function UsageOverTimeCharts({ rows }: { rows: StatsTimeSeriesRow[] }) {
+  return (
+    <div className="chart-grid time-chart-grid">
+      <LineChart title="Spend over time" rows={rows} valueKey="spend" color="#14745f" formatValue={currency} />
+      <LineChart title="Requests over time" rows={rows} valueKey="requests" color="#2563eb" formatValue={(value) => String(Math.round(value))} />
+    </div>
+  );
+}
+
+function LineChart({
+  title,
+  rows,
+  valueKey,
+  color,
+  formatValue
+}: {
+  title: string;
+  rows: StatsTimeSeriesRow[];
+  valueKey: "spend" | "requests" | "total_tokens";
+  color: string;
+  formatValue: (value: number) => string;
+}) {
+  const width = 420;
+  const height = 160;
+  const padding = { top: 14, right: 14, bottom: 30, left: 38 };
+  const values = rows.map((row) => Number(row[valueKey]) || 0);
+  const max = Math.max(1, ...values);
+  const points = rows.map((row, index) => {
+    const x = rows.length <= 1 ? width / 2 : padding.left + (index / (rows.length - 1)) * (width - padding.left - padding.right);
+    const y = padding.top + (1 - ((Number(row[valueKey]) || 0) / max)) * (height - padding.top - padding.bottom);
+    return { x, y, row };
+  });
+  const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  const area = points.length ? `${path} L ${points[points.length - 1].x.toFixed(1)} ${height - padding.bottom} L ${points[0].x.toFixed(1)} ${height - padding.bottom} Z` : "";
+  const total = values.reduce((sum, value) => sum + value, 0);
+  const last = values[values.length - 1] || 0;
+
+  return (
+    <div className="panel chart-panel time-chart-panel">
+      <PanelTitle icon={<TrendingUp size={16} />} title={title} />
+      <div className="time-chart-summary">
+        <strong>{formatValue(total)}</strong>
+        <span>Last bucket {formatValue(last)}</span>
+      </div>
+      {rows.length ? (
+        <svg className="line-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
+          <line x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} className="chart-axis" />
+          <line x1={padding.left} y1={padding.top} x2={padding.left} y2={height - padding.bottom} className="chart-axis" />
+          {[0, 0.5, 1].map((step) => {
+            const y = padding.top + step * (height - padding.top - padding.bottom);
+            return <line key={step} x1={padding.left} y1={y} x2={width - padding.right} y2={y} className="chart-grid-line" />;
+          })}
+          <path d={area} fill={color} opacity="0.12" />
+          <path d={path} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          {points.map((point) => <circle key={point.row.start} cx={point.x} cy={point.y} r="3.5" fill={color}><title>{`${point.row.label}: ${formatValue(Number(point.row[valueKey]) || 0)}`}</title></circle>)}
+          <text x={padding.left} y={height - 8} className="line-chart-label">{rows[0]?.label}</text>
+          <text x={width - padding.right} y={height - 8} textAnchor="end" className="line-chart-label">{rows[rows.length - 1]?.label}</text>
+          <text x="4" y={padding.top + 4} className="line-chart-label">{formatValue(max)}</text>
+          <text x="4" y={height - padding.bottom} className="line-chart-label">0</text>
+        </svg>
+      ) : <p className="muted">No usage in this timeframe</p>}
     </div>
   );
 }
