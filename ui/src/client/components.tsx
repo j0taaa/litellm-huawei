@@ -61,12 +61,15 @@ export function StatsCharts({ spendTitle, spendRows, modelRows, keyRows }: { spe
   );
 }
 
-export function UsageOverTimeCharts({ rows }: { rows: StatsTimeSeriesRow[] }) {
+export function UsageOverTimeCharts({ rows, controls }: { rows: StatsTimeSeriesRow[]; controls?: React.ReactNode }) {
   return (
-    <div className="chart-grid time-chart-grid">
-      <LineChart title="Spend over time" rows={rows} valueKey="spend" color="#14745f" formatValue={currency} />
-      <LineChart title="Requests over time" rows={rows} valueKey="requests" color="#2563eb" formatValue={(value) => String(Math.round(value))} />
-    </div>
+    <section className="time-charts-section" aria-label="Usage over time">
+      {controls ? <div className="time-charts-controls">{controls}</div> : null}
+      <div className="chart-grid time-chart-grid">
+        <LineChart title="Spend over time" rows={rows} valueKey="spend" color="#14745f" formatValue={currency} />
+        <LineChart title="Requests over time" rows={rows} valueKey="requests" color="#2563eb" formatValue={(value) => String(Math.round(value))} />
+      </div>
+    </section>
   );
 }
 
@@ -83,6 +86,7 @@ function LineChart({
   color: string;
   formatValue: (value: number) => string;
 }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const width = 420;
   const height = 160;
   const padding = { top: 14, right: 14, bottom: 30, left: 38 };
@@ -97,6 +101,11 @@ function LineChart({
   const area = points.length ? `${path} L ${points[points.length - 1].x.toFixed(1)} ${height - padding.bottom} L ${points[0].x.toFixed(1)} ${height - padding.bottom} Z` : "";
   const total = values.reduce((sum, value) => sum + value, 0);
   const last = values[values.length - 1] || 0;
+  const active = activeIndex === null ? null : points[activeIndex];
+  const tooltipWidth = 118;
+  const tooltipHeight = 42;
+  const tooltipX = active ? Math.min(width - tooltipWidth - 6, Math.max(6, active.x - tooltipWidth / 2)) : 0;
+  const tooltipY = active ? Math.max(6, active.y - tooltipHeight - 12) : 0;
 
   return (
     <div className="panel chart-panel time-chart-panel">
@@ -106,7 +115,9 @@ function LineChart({
         <span>Last bucket {formatValue(last)}</span>
       </div>
       {rows.length ? (
-        <svg className="line-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title}>
+        <svg className="line-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={title} onMouseLeave={() => setActiveIndex(null)} onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActiveIndex(null);
+        }}>
           <line x1={padding.left} y1={height - padding.bottom} x2={width - padding.right} y2={height - padding.bottom} className="chart-axis" />
           <line x1={padding.left} y1={padding.top} x2={padding.left} y2={height - padding.bottom} className="chart-axis" />
           {[0, 0.5, 1].map((step) => {
@@ -115,7 +126,22 @@ function LineChart({
           })}
           <path d={area} fill={color} opacity="0.12" />
           <path d={path} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          {points.map((point) => <circle key={point.row.start} cx={point.x} cy={point.y} r="3.5" fill={color}><title>{`${point.row.label}: ${formatValue(Number(point.row[valueKey]) || 0)}`}</title></circle>)}
+          {active ? (
+            <line x1={active.x} y1={padding.top} x2={active.x} y2={height - padding.bottom} className="chart-hover-line" />
+          ) : null}
+          {points.map((point, index) => (
+            <g key={point.row.start} className="line-chart-point" tabIndex={0} onMouseEnter={() => setActiveIndex(index)} onFocus={() => setActiveIndex(index)} aria-label={`${point.row.label}: ${formatValue(Number(point.row[valueKey]) || 0)}`}>
+              <circle cx={point.x} cy={point.y} r={activeIndex === index ? "5.5" : "3.5"} fill={color} />
+              <circle cx={point.x} cy={point.y} r="11" fill="transparent" />
+            </g>
+          ))}
+          {active ? (
+            <g className="line-chart-tooltip" pointerEvents="none">
+              <rect x={tooltipX} y={tooltipY} width={tooltipWidth} height={tooltipHeight} rx="6" />
+              <text x={tooltipX + 10} y={tooltipY + 17}>{active.row.label}</text>
+              <text x={tooltipX + 10} y={tooltipY + 32}>{formatValue(Number(active.row[valueKey]) || 0)}</text>
+            </g>
+          ) : null}
           <text x={padding.left} y={height - 8} className="line-chart-label">{rows[0]?.label}</text>
           <text x={width - padding.right} y={height - 8} textAnchor="end" className="line-chart-label">{rows[rows.length - 1]?.label}</text>
           <text x="4" y={padding.top + 4} className="line-chart-label">{formatValue(max)}</text>

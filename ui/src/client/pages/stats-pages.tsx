@@ -19,10 +19,6 @@ export function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => voi
         tone="green"
         action={<div className="header-actions"><StatsActions exportHref={`/api/stats/export.csv?${query}`} onRefresh={reload} /></div>}
       />
-      <StatsTimeframeControls timeframe={timeframe} bucket={bucket} onTimeframeChange={(next) => {
-        setTimeframe(next);
-        setBucket(defaultBucket(next));
-      }} onBucketChange={setBucket} />
       {loading || !data ? <EmptyState text="Loading stats" /> : (
         <>
           <div className="metrics">
@@ -32,7 +28,12 @@ export function StatsPage({ onNavigate }: { onNavigate: (path: RoutePath) => voi
             <Metric icon={<Users size={18} />} tone="violet" label="Teams" value={String(data.totals.teams)} />
             <Metric icon={<Layers3 size={18} />} tone="rose" label="Models" value={String(data.totals.models)} />
           </div>
-          <UsageOverTimeCharts rows={data.timeSeries || []} />
+          <UsageOverTimeCharts rows={data.timeSeries || []} controls={
+            <StatsTimeframeControls timeframe={timeframe} bucket={bucket} onTimeframeChange={(next) => {
+              setTimeframe(next);
+              setBucket(defaultBucket(next));
+            }} onBucketChange={setBucket} />
+          } />
           <StatsCharts spendTitle="Spend by team" spendRows={data.byTeam} modelRows={data.byModel} keyRows={data.byKey} />
           <div className="grid3">
             <Breakdown icon={<Layers3 size={16} />} tone="rose" title="By model" rows={data.byModel} />

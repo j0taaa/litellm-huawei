@@ -462,7 +462,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Model name")).toHaveValue("glm-test");
   await page.getByLabel("Display name").fill("GLM Edited");
   await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
-  expect(modelUpdatePayload).toMatchObject({ model_name: "glm-test", model_info: { id: "model-glm-test", huawei_maas: { name: "GLM Edited" } } });
+  await expect.poll(() => modelUpdatePayload).toMatchObject({ model_name: "glm-test", model_info: { id: "model-glm-test", huawei_maas: { name: "GLM Edited" } } });
   await page.getByTitle("Delete model").first().click();
   await expect.poll(() => modelDeleteUrl).toContain("/api/models/model-glm-test");
 
@@ -682,6 +682,10 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
   await expect(page.getByLabel("Group by")).toHaveValue("day");
   await expect(page.getByRole("img", { name: "Spend over time" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Requests over time" })).toBeVisible();
+  const usageOverTime = page.getByRole("region", { name: "Usage over time" });
+  await expect(usageOverTime.getByLabel("Timeframe")).toBeVisible();
+  await usageOverTime.locator(".line-chart-point").first().hover();
+  await expect(usageOverTime.locator(".line-chart-tooltip").first()).toBeVisible();
   await expect(page.getByRole("img", { name: "Spend by team" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Spend by model %" })).toBeVisible();
   await expect(page.getByRole("img", { name: "Spend by key" })).toBeVisible();
