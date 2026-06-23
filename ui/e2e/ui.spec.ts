@@ -389,7 +389,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByRole("checkbox", { name: "glm-test" }).check();
   await page.getByLabel("CPF redaction").check();
   await page.getByRole("dialog").getByRole("button", { name: "Create team" }).click();
-  expect(teamCreatePayload).toMatchObject({
+  await expect.poll(() => teamCreatePayload).toMatchObject({
     team_alias: "Team modal",
     budget_duration: "30d",
     rpm_limit: 180,

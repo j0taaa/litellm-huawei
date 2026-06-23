@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BarChart3, BrainCircuit, ExternalLink, Eye, KeyRound, Layers3, LogOut, MessageSquare, Regex, Search, Users } from "lucide-react";
+import { BarChart3, BrainCircuit, ExternalLink, KeyRound, Layers3, LogOut, MessageSquare, Regex, Search, Users } from "lucide-react";
 import type { SessionUser } from "../shared/types";
 import { api } from "./api";
 import { KeysPage } from "./pages/keys-page";
-import { ImageSupportPage } from "./pages/image-support-page";
 import { KeyStatsPage, StatsPage, TeamStatsPage } from "./pages/stats-pages";
 import { ModelsPage } from "./pages/models-page";
 import { PoliciesPage } from "./pages/policies-page";
@@ -15,14 +14,13 @@ import { TestPage } from "./pages/test-page";
 import type { RoutePath } from "./types";
 import "./styles.css";
 
-const routes: Array<{ path: "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/skills" | "/image-support" | "/search-tools" | "/test"; label: string; icon: React.ReactNode }> = [
+const routes: Array<{ path: "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/skills" | "/search-tools" | "/test"; label: string; icon: React.ReactNode }> = [
   { path: "/stats", label: "Stats", icon: <BarChart3 size={18} /> },
   { path: "/keys", label: "Keys", icon: <KeyRound size={18} /> },
   { path: "/teams", label: "Teams", icon: <Users size={18} /> },
   { path: "/models", label: "Models", icon: <Layers3 size={18} /> },
   { path: "/policies", label: "Policies", icon: <Regex size={18} /> },
   { path: "/skills", label: "Skills", icon: <BrainCircuit size={18} /> },
-  { path: "/image-support", label: "Images", icon: <Eye size={18} /> },
   { path: "/search-tools", label: "Search Tools", icon: <Search size={18} /> },
   { path: "/test", label: "Test", icon: <MessageSquare size={18} /> }
 ];
@@ -156,15 +154,14 @@ function renderRoute(route: RoutePath, navigate: (path: RoutePath) => void): Rea
   if (route === "/models") return <ModelsPage />;
   if (route === "/policies") return <PoliciesPage />;
   if (route === "/skills") return <SkillsPage />;
-  if (route === "/image-support") return <ImageSupportPage />;
   if (route === "/search-tools") return <SearchToolsPage />;
   if (route === "/test") return <TestPage />;
   return <StatsPage onNavigate={navigate} />;
 }
 
-function activeNavRoute(route: RoutePath): "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/skills" | "/image-support" | "/search-tools" | "/test" {
+function activeNavRoute(route: RoutePath): "/stats" | "/keys" | "/teams" | "/models" | "/policies" | "/skills" | "/search-tools" | "/test" {
   if (route.startsWith("/stats")) return "/stats";
-  if (route === "/keys" || route === "/teams" || route === "/models" || route === "/policies" || route === "/skills" || route === "/image-support" || route === "/search-tools" || route === "/test") return route;
+  if (route === "/keys" || route === "/teams" || route === "/models" || route === "/policies" || route === "/skills" || route === "/search-tools" || route === "/test") return route;
   return "/stats";
 }
 
