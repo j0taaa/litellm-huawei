@@ -33,8 +33,9 @@ async def apply_image_support(data: dict[str, Any], *, config: ImageSupportConfi
     if config is None or not config.enabled or not config.openrouter_api_key:
         raise ImageSupportError("image_support_not_configured")
 
+    vision_model = _openrouter_model_id(config.vision_model)
     extracted = await _extract_image_text(data, image_parts, config)
-    _remove_images_and_append_analysis(data, extracted, config.vision_model)
+    _remove_images_and_append_analysis(data, extracted, vision_model)
     return data
 
 
@@ -64,7 +65,7 @@ async def _extract_image_text(data: dict[str, Any], image_parts: list[dict[str, 
     content: list[dict[str, Any]] = [{"type": "text", "text": user_text}]
     content.extend(json.loads(json.dumps(part)) for part in image_parts)
     payload = {
-        "model": config.vision_model,
+        "model": _openrouter_model_id(config.vision_model),
         "messages": [
             {"role": "system", "content": config.extraction_prompt},
             {"role": "user", "content": content},
@@ -76,6 +77,11 @@ async def _extract_image_text(data: dict[str, Any], image_parts: list[dict[str, 
     if not extracted:
         raise ImageSupportError("image_extraction_empty")
     return extracted
+
+
+def _openrouter_model_id(model: str) -> str:
+    prefix = "openrouter/"
+    return model[len(prefix):] if model.startswith(prefix) else model
 
 
 def _openrouter_request(api_key: str, payload: dict[str, Any]) -> dict[str, Any]:

@@ -219,7 +219,7 @@ export function sharedLimitMetadata(form: KeyFormState | TeamFormState): Record<
     }) : undefined,
     huawei_image_support: form.imageAnalysis ? clean({
       enabled: true,
-      vision_model: form.imageModel || undefined,
+      vision_model: imageAnalysisModel(form.imageModel) || undefined,
       extraction_prompt: form.imagePrompt || defaultImageAnalysisPrompt
     }) : undefined
   });
@@ -306,7 +306,7 @@ export function teamFormFromRow(row: TeamRow, policies: PromptPolicy[] = [], ski
       .map((skill) => skill.id),
     webSearch,
     imageAnalysis: imageSupport.enabled === true,
-    imageModel: stringField(imageSupport, "vision_model") || "",
+    imageModel: imageAnalysisModel(stringField(imageSupport, "vision_model")),
     imagePrompt: stringField(imageSupport, "extraction_prompt") || defaultImageAnalysisPrompt
   };
 }
@@ -357,7 +357,7 @@ export function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], ke
       .map((skill) => skill.id),
     webSearch,
     imageAnalysis: imageSupport.enabled === true,
-    imageModel: stringField(imageSupport, "vision_model") || "",
+    imageModel: imageAnalysisModel(stringField(imageSupport, "vision_model")),
     imagePrompt: stringField(imageSupport, "extraction_prompt") || defaultImageAnalysisPrompt
   };
 }
@@ -373,6 +373,12 @@ function webSearchFormFromMetadata(metadata: Record<string, unknown>): WebSearch
     maxResults: numberField(webSearch, "max_results") || defaultWebSearchForm.maxResults,
     maxQueries: numberField(webSearch, "max_queries") || defaultWebSearchForm.maxQueries
   };
+}
+
+function imageAnalysisModel(value: string | null): string {
+  if (!value) return "";
+  const prefix = "openrouter/";
+  return value.startsWith(prefix) ? value.slice(prefix.length) : value;
 }
 
 function numberField(value: Record<string, unknown>, key: string): number | null {

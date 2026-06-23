@@ -67,12 +67,18 @@ function imageModelOptions(models: ModelInfo[]): Array<{ value: string; label: s
   return sorted.flatMap((model) => {
     const upstream = model.litellm_params?.model || model.model_name;
     const provider = model.litellm_params?.custom_llm_provider || "";
-    const value = provider === "openrouter" && upstream ? upstream : model.model_name;
+    const normalizedUpstream = provider === "openrouter" ? openRouterModelId(upstream) : upstream;
+    const value = provider === "openrouter" && normalizedUpstream ? normalizedUpstream : model.model_name;
     if (!value || seen.has(value)) return [];
     seen.add(value);
-    const label = upstream && upstream !== model.model_name ? `${model.model_name} (${upstream})` : model.model_name;
+    const label = normalizedUpstream && normalizedUpstream !== model.model_name ? `${model.model_name} (${normalizedUpstream})` : model.model_name;
     return [{ value, label }];
   });
+}
+
+function openRouterModelId(model: string): string {
+  const prefix = "openrouter/";
+  return model.startsWith(prefix) ? model.slice(prefix.length) : model;
 }
 
 function modelSupportsVision(model: ModelInfo): boolean {
