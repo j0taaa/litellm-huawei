@@ -7,18 +7,29 @@ import { keyIdentifier, normalizeKeyRow } from "../form-state";
 import type { TestChatMessage, TestImageAttachment } from "../types";
 import { chatResponseText } from "../utils";
 
+const testPageStorageKey = "huawei-litellm-ui:test-page-state";
+
+type TestPageStoredState = {
+  selectedKey: string;
+  apiKey: string;
+  model: string;
+  prompt: string;
+  images: TestImageAttachment[];
+  messages: TestChatMessage[];
+};
+
 export function TestPage() {
   const keysResource = useResource<{ keys?: ApiKeyListRow[]; data?: ApiKeyListRow[] }>("/api/keys?page=1&size=100");
   const modelsResource = useResource<{ data?: ModelInfo[] }>("/api/models");
   const keys = keysResource.data?.keys || keysResource.data?.data || [];
   const models = modelsResource.data?.data || [];
-  const [selectedKey, setSelectedKey] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("");
-  const [maxTokens, setMaxTokens] = useState("512");
-  const [prompt, setPrompt] = useState("");
-  const [images, setImages] = useState<TestImageAttachment[]>([]);
-  const [messages, setMessages] = useState<TestChatMessage[]>([]);
+  const initialState = useMemo(loadStoredTestPageState, []);
+  const [selectedKey, setSelectedKey] = useState(initialState.selectedKey);
+  const [apiKey, setApiKey] = useState(initialState.apiKey);
+  const [model, setModel] = useState(initialState.model);
+  const [prompt, setPrompt] = useState(initialState.prompt);
+  const [images, setImages] = useState<TestImageAttachment[]>(initialState.images);
+  const [messages, setMessages] = useState<TestChatMessage[]>(initialState.messages);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const selectedKeyRow = useMemo(() => keys.find((key) => keyIdentifier(key) === selectedKey), [keys, selectedKey]);
@@ -29,13 +40,15 @@ export function TestPage() {
   );
 
   useEffect(() => {
-    if (!selectedKey && keys.length) {
+    if (!keys.length) return;
+    const selectedExists = keys.some((key) => keyIdentifier(key) === selectedKey);
+    if (!selectedKey || !selectedExists) {
       const first = keys[0];
       const id = keyIdentifier(first);
       setSelectedKey(id);
-      setApiKey(usableBearerKey(first));
+      if (!apiKey || !selectedExists) setApiKey(usableBearerKey(first));
     }
-  }, [keys, selectedKey]);
+  }, [apiKey, keys, selectedKey]);
 
   useEffect(() => {
     if (!allowedModels.length) {
@@ -46,6 +59,10 @@ export function TestPage() {
       setModel(allowedModels[0].model_name);
     }
   }, [allowedModels, model]);
+
+  useEffect(() => {
+    saveStoredTestPageState({ selectedKey, apiKey, model, prompt, images, messages });
+  }, [apiKey, images, messages, model, prompt, selectedKey]);
 
   function selectKey(value: string) {
     setSelectedKey(value);
@@ -102,8 +119,7 @@ export function TestPage() {
         body: {
           api_key: apiKey,
           model,
-          messages: requestMessages,
-          max_tokens: Number(maxTokens) || 512
+          messages: requestMessages
         }
       });
       setMessages([...nextMessages, { role: "assistant", content: chatResponseText(result) }]);
@@ -147,7 +163,6 @@ export function TestPage() {
             </select>
             {selectedKeyRow && allowedModelNames.length ? <span className="field-note compact">{allowedModels.length} model{allowedModels.length === 1 ? "" : "s"} allowed for this key.</span> : null}
           </label>
-          <label>Max tokens<input type="number" min="1" max="8192" step="1" value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} /></label>
         </div>
         <div className="chat-window" aria-label="Chat transcript">
           {messages.length ? messages.map((message, index) => (
@@ -185,6 +200,45 @@ export function TestPage() {
       </div>
     </section>
   );
+}
+
+function loadStoredTestPageState(): TestPageStoredState {
+  const fallback: TestPageStoredState = { selectedKey: "", apiKey: "", model: "", prompt: "", images: [], messages: [] };
+  try {
+    const raw = localStorage.getItem(testPageStorageKey);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<TestPageStoredState>;
+    return {
+      selectedKey: typeof parsed.selectedKey === "string" ? parsed.selectedKey : "",
+      apiKey: typeof parsed.apiKey === "string" ? parsed.apiKey : "",
+      model: typeof parsed.model === "string" ? parsed.model : "",
+      prompt: typeof parsed.prompt === "string" ? parsed.prompt : "",
+      images: Array.isArray(parsed.images) ? parsed.images.filter(isTestImageAttachment) : [],
+      messages: Array.isArray(parsed.messages) ? parsed.messages.filter(isTestChatMessage) : []
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function saveStoredTestPageState(state: TestPageStoredState) {
+  try {
+    localStorage.setItem(testPageStorageKey, JSON.stringify(state));
+  } catch {
+    // Large image attachments can exceed browser storage quotas; the current in-memory state still works.
+  }
+}
+
+function isTestImageAttachment(value: unknown): value is TestImageAttachment {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.id === "string" && typeof candidate.name === "string" && typeof candidate.dataUrl === "string";
+}
+
+function isTestChatMessage(value: unknown): value is TestChatMessage {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return ["user", "assistant", "system"].includes(String(candidate.role)) && typeof candidate.content === "string";
 }
 
 function usableBearerKey(row: ApiKeyListRow): string {

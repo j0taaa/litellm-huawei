@@ -543,6 +543,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Model")).toHaveValue("deepseek-v4-flash");
   await expect(page.getByLabel("Model").locator("option")).toHaveText(["Select model", "deepseek-v4-flash"]);
   await expect(page.getByText("1 model allowed for this key.")).toBeVisible();
+  await expect(page.getByLabel("Max tokens")).toHaveCount(0);
   const promptBox = page.getByPlaceholder("Send a test prompt");
   await promptBox.fill("Hello");
   await promptBox.press("Shift+Enter");
@@ -553,9 +554,27 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   expect(testChatPayload).toMatchObject({
     api_key: "sk-test-full",
     model: "deepseek-v4-flash",
-    messages: [{ role: "user", content: "Hello\nfrom the test tab" }],
-    max_tokens: 512
+    messages: [{ role: "user", content: "Hello\nfrom the test tab" }]
   });
+  expect(testChatPayload).not.toHaveProperty("max_tokens");
+  await promptBox.fill("Draft prompt");
+  await page.getByRole("link", { name: "Stats" }).click();
+  await expect(page.getByRole("heading", { name: "Stats" })).toBeVisible();
+  await page.getByRole("link", { name: "Test" }).click();
+  await expect(page.getByRole("heading", { name: "Test" })).toBeVisible();
+  await expect(page.getByLabel("API key", { exact: true })).toHaveValue("hash-delete-test");
+  await expect(page.getByLabel("Bearer API key")).toHaveValue("sk-test-full");
+  await expect(page.getByLabel("Model")).toHaveValue("deepseek-v4-flash");
+  await expect(page.getByText("Hello from the test tab")).toBeVisible();
+  await expect(page.getByText("Test response from model")).toBeVisible();
+  await expect(page.getByPlaceholder("Send a test prompt")).toHaveValue("Draft prompt");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Test" })).toBeVisible();
+  await expect(page.getByLabel("API key", { exact: true })).toHaveValue("hash-delete-test");
+  await expect(page.getByLabel("Bearer API key")).toHaveValue("sk-test-full");
+  await expect(page.getByLabel("Model")).toHaveValue("deepseek-v4-flash");
+  await expect(page.getByText("Test response from model")).toBeVisible();
+  await expect(page.getByPlaceholder("Send a test prompt")).toHaveValue("Draft prompt");
 });
 
 test("direct route keeps destination after login", async ({ page }) => {
