@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarClock, Pencil, Plus, Power, RefreshCcw, Trash2, Users } from "lucide-react";
+import { CalendarClock, Image, Pencil, Plus, Power, RefreshCcw, Trash2, Users } from "lucide-react";
 import type { ModelInfo, PromptPolicy, PromptSkill, SearchTool, TeamRow } from "../../shared/types";
 import { api, useResource } from "../api";
 import { EmptyState, Header, Modal, StatusBadge } from "../components";
@@ -186,6 +186,11 @@ export function TeamsPage() {
               searchTools={searchTools}
               models={models.data?.data || []}
             />
+            <fieldset className="config-section">
+              <span className="field-label section-title"><Image size={16} /> Image analysis</span>
+              <label className="toggle-row"><input type="checkbox" checked={form.imageAnalysis} onChange={(e) => setForm({ ...form, imageAnalysis: e.target.checked })} /> <span>Enable image analysis for text-only models</span></label>
+              <p className="field-note compact">When enabled, image inputs are described with the configured vision model before the request reaches a text-only model.</p>
+            </fieldset>
             <fieldset className="model-access">
               <div className="model-access-header">
                 <span className="field-label">Model access</span>

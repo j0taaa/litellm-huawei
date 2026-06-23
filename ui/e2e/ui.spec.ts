@@ -56,7 +56,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
             models: ["deepseek-v4-flash"],
             metadata: {
               huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
-              huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 }
+              huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
+              huawei_image_support: { enabled: true }
             },
             blocked: false
           }]
@@ -169,6 +170,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Trigger token")).toHaveValue("[SEARCH]");
   await expect(page.getByLabel("Max results")).toHaveValue("5");
   await expect(page.getByLabel("Max queries")).toHaveValue("2");
+  await expect(page.getByLabel("Enable image analysis for text-only models")).not.toBeChecked();
+  await page.getByLabel("Enable image analysis for text-only models").check();
   await expect(page.getByText("No models selected means this key can use all models.")).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "deepseek-v4-flash" })).toBeVisible();
   await page.getByRole("checkbox", { name: "deepseek-v4-flash" }).check();
@@ -187,7 +190,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
         timezone: "America/Sao_Paulo",
         rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }]
       },
-      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 }
+      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
+      huawei_image_support: { enabled: true }
     },
     models: ["deepseek-v4-flash"]
   });
@@ -205,6 +209,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Max parallel")).toHaveValue("2");
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
   await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
+  await expect(page.getByLabel("Enable image analysis for text-only models")).toBeChecked();
   await expect(page.getByLabel("Search tool")).toHaveValue("perplexity-search");
   await expect(page.getByLabel("Planner model")).toHaveValue("deepseek-v4-flash");
   await expect(page.getByLabel("CPF redaction")).toBeChecked();
@@ -222,7 +227,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     models: ["deepseek-v4-flash"],
     metadata: {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
-      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 }
+      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
+      huawei_image_support: { enabled: true }
     },
     prompt_policy_ids: selectedPolicyIds
   });
@@ -233,6 +239,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Max TPS")).toHaveValue("2");
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
   await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
+  await expect(page.getByLabel("Enable image analysis for text-only models")).toBeChecked();
   await expect(page.getByLabel("CPF redaction")).toBeChecked();
   await page.getByRole("dialog").getByRole("button", { name: "Clone key" }).click();
   await expect(page.getByText("sk-test-clone")).toBeVisible();
@@ -246,7 +253,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     models: ["deepseek-v4-flash"],
     metadata: {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
-      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 }
+      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
+      huawei_image_support: { enabled: true }
     },
     prompt_policy_ids: selectedPolicyIds
   });
@@ -283,7 +291,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
             metadata: {
               huawei_token_budget: { max_tokens: 25000, reset_duration: "1d", counts: "total_tokens" },
               huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2, 3], start: "08:00", end: "18:00" }] },
-              huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", planner_model: "glm-test", max_results: 4, max_queries: 1 }
+              huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", planner_model: "glm-test", max_results: 4, max_queries: 1 },
+              huawei_image_support: { enabled: true }
             },
             blocked: false
           }]
@@ -365,6 +374,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("Planner model").selectOption("glm-test");
   await page.getByLabel("Max results").fill("4");
   await page.getByLabel("Max queries").fill("1");
+  await page.getByLabel("Enable image analysis for text-only models").check();
   await page.getByRole("checkbox", { name: "glm-test" }).check();
   await page.getByLabel("CPF redaction").check();
   await page.getByRole("dialog").getByRole("button", { name: "Create team" }).click();
@@ -377,7 +387,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     metadata: {
       huawei_token_budget: { max_tokens: 30000, reset_duration: "30d", counts: "total_tokens" },
       huawei_time_access: { timezone: "America/Sao_Paulo", rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }] },
-      huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", planner_model: "glm-test", max_results: 4, max_queries: 1 }
+      huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", planner_model: "glm-test", max_results: 4, max_queries: 1 },
+      huawei_image_support: { enabled: true }
     },
     models: ["glm-test"],
     prompt_policy_ids: ["policy-cpf"]
@@ -394,6 +405,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Total token quota")).toHaveValue("25000");
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
   await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
+  await expect(page.getByLabel("Enable image analysis for text-only models")).toBeChecked();
   await expect(page.getByLabel("Search mode")).toHaveValue("automatic");
   await expect(page.getByLabel("Max results")).toHaveValue("4");
   await expect(page.getByLabel("CPF redaction")).not.toBeChecked();

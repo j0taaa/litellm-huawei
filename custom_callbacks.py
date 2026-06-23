@@ -53,17 +53,18 @@ class HuaweiMaaSCostLogger(CustomLogger):
                     detail={"error": "time_access_denied", "source": source, "timezone": time_access.timezone},
                 )
 
-        try:
-            data = await apply_image_support(
-                data,
-                config=await self._image_support_config(),
-                supports_vision=await self._model_supports_vision(_request_model_id(data)),
-            )
-        except ImageSupportError as exc:
-            raise HTTPException(
-                status_code=502 if str(exc).startswith("image_extraction_failed") else 400,
-                detail={"error": str(exc)},
-            ) from exc
+        if _image_support_enabled(team_metadata) or _image_support_enabled(auth_metadata):
+            try:
+                data = await apply_image_support(
+                    data,
+                    config=await self._image_support_config(),
+                    supports_vision=await self._model_supports_vision(_request_model_id(data)),
+                )
+            except ImageSupportError as exc:
+                raise HTTPException(
+                    status_code=502 if str(exc).startswith("image_extraction_failed") else 400,
+                    detail={"error": str(exc)},
+                ) from exc
 
         try:
             data = await apply_web_search(
@@ -517,6 +518,13 @@ def _actual_total_tokens(usage: dict[str, Any]) -> int:
 def _auth_metadata(user_api_key_dict: Any) -> dict[str, Any] | None:
     metadata = _auth_value(user_api_key_dict, "metadata")
     return metadata if isinstance(metadata, dict) else None
+
+
+def _image_support_enabled(metadata: dict[str, Any] | None) -> bool:
+    if not isinstance(metadata, dict):
+        return False
+    value = metadata.get("huawei_image_support")
+    return isinstance(value, dict) and value.get("enabled") is True
 
 
 def _key_identifier(user_api_key_dict: Any) -> str | None:

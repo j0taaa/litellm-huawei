@@ -194,7 +194,7 @@ def test_prompt_skills_are_appended_before_request(monkeypatch):
     assert data["metadata"]["huawei_prompt_skills_applied"][0]["id"] == "skill-exa"
 
 
-def test_image_request_to_text_only_model_is_transformed(monkeypatch):
+def test_image_request_to_text_only_model_is_transformed_when_key_enabled(monkeypatch):
     logger = logger_with_team(monkeypatch, {})
 
     async def fake_apply(data, *, config, supports_vision):
@@ -216,7 +216,7 @@ def test_image_request_to_text_only_model_is_transformed(monkeypatch):
 
     data = run(
         logger.async_pre_call_hook(
-            {"token": "key-a", "metadata": {}},
+            {"token": "key-a", "metadata": {"huawei_image_support": {"enabled": True}}},
             None,
             {
                 "model": "deepseek-v4-pro",
@@ -235,6 +235,58 @@ def test_image_request_to_text_only_model_is_transformed(monkeypatch):
     )
 
     assert data["messages"][0]["content"].endswith("A chart with revenue bars.")
+    assert data["metadata"]["huawei_image_extraction"]["extracted"] is True
+
+
+def test_image_request_to_text_only_model_is_unchanged_when_not_enabled(monkeypatch):
+    logger = logger_with_team(monkeypatch, {})
+
+    async def fake_apply(data, *, config, supports_vision):
+        raise AssertionError("image support should not run")
+
+    monkeypatch.setattr(custom_callbacks, "apply_image_support", fake_apply)
+
+    data = {
+        "model": "deepseek-v4-pro",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What is this?"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
+                ],
+            }
+        ],
+    }
+
+    returned = run(logger.async_pre_call_hook({"token": "key-a", "metadata": {}}, None, data, "chat"))
+
+    assert returned["messages"][0]["content"][1]["type"] == "image_url"
+
+
+def test_image_request_to_text_only_model_is_transformed_when_team_enabled(monkeypatch):
+    logger = logger_with_team(monkeypatch, {"huawei_image_support": {"enabled": True}})
+
+    async def fake_apply(data, *, config, supports_vision):
+        data["metadata"] = {"huawei_image_extraction": {"extracted": True, "model": "openai/gpt-4o-mini"}}
+        return data
+
+    monkeypatch.setattr(custom_callbacks, "apply_image_support", fake_apply)
+
+    async def image_support_config():
+        return {"enabled": True}
+
+    monkeypatch.setattr(logger, "_image_support_config", image_support_config)
+
+    data = run(
+        logger.async_pre_call_hook(
+            {"token": "key-a", "team_id": "team-a", "metadata": {}},
+            None,
+            {"model": "deepseek-v4-pro", "messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]},
+            "chat",
+        )
+    )
+
     assert data["metadata"]["huawei_image_extraction"]["extracted"] is True
 
 

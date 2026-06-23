@@ -62,7 +62,8 @@ export const defaultKeyForm: KeyFormState = {
   models: [],
   policyIds: [],
   skillIds: [],
-  webSearch: { ...defaultWebSearchForm }
+  webSearch: { ...defaultWebSearchForm },
+  imageAnalysis: false
 };
 
 export const defaultTeamForm: TeamFormState = {
@@ -89,7 +90,8 @@ export const defaultTeamForm: TeamFormState = {
   models: [],
   policyIds: [],
   skillIds: [],
-  webSearch: { ...defaultWebSearchForm }
+  webSearch: { ...defaultWebSearchForm },
+  imageAnalysis: false
 };
 
 export const defaultPolicyRule: PromptPolicyRule = {
@@ -210,7 +212,8 @@ export function sharedLimitMetadata(form: KeyFormState | TeamFormState): Record<
       trigger: form.webSearch.mode === "trigger" ? form.webSearch.trigger || defaultWebSearchForm.trigger : undefined,
       max_results: form.webSearch.maxResults,
       max_queries: form.webSearch.maxQueries
-    }) : undefined
+    }) : undefined,
+    huawei_image_support: form.imageAnalysis ? { enabled: true } : undefined
   });
 }
 
@@ -257,6 +260,7 @@ export function teamFormFromRow(row: TeamRow, policies: PromptPolicy[] = [], ski
   const tokenBudget = objectField(metadata, "huawei_token_budget");
   const timeAccess = objectField(metadata, "huawei_time_access");
   const webSearch = webSearchFormFromMetadata(metadata);
+  const imageSupport = objectField(metadata, "huawei_image_support");
   const firstRule = Array.isArray(timeAccess.rules) && timeAccess.rules[0] && typeof timeAccess.rules[0] === "object"
     ? timeAccess.rules[0] as Record<string, unknown>
     : {};
@@ -292,7 +296,8 @@ export function teamFormFromRow(row: TeamRow, policies: PromptPolicy[] = [], ski
     skillIds: skills
       .filter((skill) => skill.assignments.some((assignment) => assignment.target_type === "team" && assignment.target_id === row.team_id))
       .map((skill) => skill.id),
-    webSearch
+    webSearch,
+    imageAnalysis: imageSupport.enabled === true
   };
 }
 
@@ -301,6 +306,7 @@ export function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], ke
   const tokenBudget = objectField(metadata, "huawei_token_budget");
   const timeAccess = objectField(metadata, "huawei_time_access");
   const webSearch = webSearchFormFromMetadata(metadata);
+  const imageSupport = objectField(metadata, "huawei_image_support");
   const firstRule = Array.isArray(timeAccess.rules) && timeAccess.rules[0] && typeof timeAccess.rules[0] === "object"
     ? timeAccess.rules[0] as Record<string, unknown>
     : {};
@@ -339,7 +345,8 @@ export function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], ke
     skillIds: skills
       .filter((skill) => skill.assignments.some((assignment) => assignment.target_type === "key" && assignment.target_id === key))
       .map((skill) => skill.id),
-    webSearch
+    webSearch,
+    imageAnalysis: imageSupport.enabled === true
   };
 }
 
