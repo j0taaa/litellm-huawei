@@ -508,13 +508,17 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Bearer API key")).toHaveValue("");
   await page.getByLabel("Bearer API key").fill("sk-test-full");
   await expect(page.getByLabel("Model")).toHaveValue("glm-test");
-  await page.getByPlaceholder("Send a test prompt").fill("Hello from the test tab");
-  await page.getByRole("button", { name: "Send" }).click();
+  const promptBox = page.getByPlaceholder("Send a test prompt");
+  await promptBox.fill("Hello");
+  await promptBox.press("Shift+Enter");
+  await promptBox.pressSequentially("from the test tab");
+  await expect(promptBox).toHaveValue("Hello\nfrom the test tab");
+  await promptBox.press("Enter");
   await expect(page.getByText("Test response from model")).toBeVisible();
   expect(testChatPayload).toMatchObject({
     api_key: "sk-test-full",
     model: "glm-test",
-    messages: [{ role: "user", content: "Hello from the test tab" }],
+    messages: [{ role: "user", content: "Hello\nfrom the test tab" }],
     max_tokens: 512
   });
 });

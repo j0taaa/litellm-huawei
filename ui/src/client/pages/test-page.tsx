@@ -58,6 +58,10 @@ export function TestPage() {
 
   async function sendPrompt(event: React.FormEvent) {
     event.preventDefault();
+    await submitPrompt();
+  }
+
+  async function submitPrompt() {
     const content = prompt.trim();
     if ((!content && !images.length) || !apiKey || !model) return;
     const currentImages = images;
@@ -100,6 +104,12 @@ export function TestPage() {
     }
   }
 
+  function handlePromptKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    if (!sending) void submitPrompt();
+  }
+
   return (
     <section>
       <Header icon={<MessageSquare size={22} />} title="Test" tone="green" />
@@ -139,7 +149,7 @@ export function TestPage() {
         {error ? <div className="error">{error}</div> : null}
         <form className="chat-composer" onSubmit={sendPrompt}>
           <div className="composer-main">
-            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Send a test prompt" />
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={handlePromptKeyDown} placeholder="Send a test prompt" />
             {images.length ? (
               <div className="image-attachments">
                 {images.map((image) => (
