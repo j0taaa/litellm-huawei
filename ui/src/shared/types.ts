@@ -57,6 +57,7 @@ export type ModelInfo = {
     input_cost_per_token?: number;
     output_cost_per_token?: number;
     supports_vision?: boolean;
+    litellm_provider?: string;
     huawei_maas?: {
       id: string;
       name: string;

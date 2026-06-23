@@ -128,7 +128,7 @@ export function ModelsPage() {
           <form className="modal-form" onSubmit={saveModel}>
             <label>Model name<input value={form.model_name} onChange={(e) => setForm({ ...form, model_name: e.target.value })} required /></label>
             <label>Upstream model<input value={form.upstream_model} onChange={(e) => setForm({ ...form, upstream_model: e.target.value })} required /></label>
-            <label>Provider<input value={form.custom_llm_provider} onChange={(e) => setForm({ ...form, custom_llm_provider: e.target.value })} required /></label>
+            <label>LiteLLM provider<input value={form.custom_llm_provider} onChange={(e) => setForm({ ...form, custom_llm_provider: e.target.value })} required /></label>
             <label>API base<input value={form.api_base} onChange={(e) => setForm({ ...form, api_base: e.target.value })} required /></label>
             <label>API key reference<input value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} required /></label>
             <label>Display name<input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></label>
@@ -181,7 +181,7 @@ export function ModelsPage() {
             <tr key={model.model_info?.id || model.model_name}>
               <td>{model.model_name}</td>
               <td>{model.litellm_params?.model || "-"}</td>
-              <td>{model.litellm_params?.custom_llm_provider || "-"}</td>
+              <td title={rawProviderLabel(model)}>{providerLabel(model)}</td>
               <td>{model.model_info?.huawei_maas?.supports_vision || model.model_info?.supports_vision ? "Yes" : "No"}</td>
               <td>{model.model_info?.max_input_tokens || "-"}</td>
               <td>{model.model_info?.max_output_tokens || "-"}</td>
@@ -199,4 +199,21 @@ export function ModelsPage() {
       )}
     </section>
   );
+}
+
+function providerLabel(model: ModelInfo): string {
+  const rawProvider = model.litellm_params?.custom_llm_provider || model.model_info?.litellm_provider || "";
+  if (rawProvider === "openai" && isHuaweiMaaSModel(model)) return "Huawei Cloud MaaS";
+  return rawProvider || "-";
+}
+
+function rawProviderLabel(model: ModelInfo): string {
+  const rawProvider = model.litellm_params?.custom_llm_provider || model.model_info?.litellm_provider || "";
+  return rawProvider && providerLabel(model) !== rawProvider ? `LiteLLM provider: ${rawProvider}` : "";
+}
+
+function isHuaweiMaaSModel(model: ModelInfo): boolean {
+  const apiBase = model.litellm_params?.api_base || "";
+  const apiKey = model.litellm_params?.api_key || "";
+  return apiBase.includes("modelarts-maas") || apiKey.includes("HUAWEI_MAAS_API_KEY");
 }

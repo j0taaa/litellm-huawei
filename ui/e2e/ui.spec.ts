@@ -440,13 +440,14 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Models" })).toBeVisible();
   await expect(page).toHaveURL(/\/models$/);
   await expect(page.getByRole("cell", { name: "glm-test", exact: true })).toBeVisible();
+  await expect(page.getByRole("row", { name: /glm-test/ }).getByRole("cell", { name: "Huawei Cloud MaaS" })).toBeVisible();
   await page.getByRole("button", { name: "Sync catalog" }).click();
   await expect(page.getByText("Synced 1 Huawei MaaS models from the catalog.")).toBeVisible();
   expect(modelSyncCalled).toBe(true);
   await page.getByRole("button", { name: "Add model" }).click();
   await page.getByLabel("Model name").fill("new-model");
   await page.getByLabel("Upstream model").fill("new-upstream");
-  await page.getByLabel("Provider").fill("openai");
+  await page.getByLabel("LiteLLM provider").fill("openai");
   await page.getByLabel("API base").fill("https://example.com/v1");
   await page.getByLabel("API key reference").fill("os.environ/HUAWEI_MAAS_API_KEY");
   await page.getByLabel("Input USD / 1M").fill("1.5");
@@ -484,7 +485,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   });
   await page.getByRole("button", { name: "Add OpenRouter" }).click();
   await expect(page.getByRole("dialog", { name: "Add model" })).toBeVisible();
-  await expect(page.getByLabel("Provider")).toHaveValue("openrouter");
+  await expect(page.getByLabel("LiteLLM provider")).toHaveValue("openrouter");
   await expect(page.getByLabel("API base")).toHaveValue("https://openrouter.ai/api/v1");
   await expect(page.getByLabel("API key reference")).toHaveValue("os.environ/OPENROUTER_API_KEY");
   await expect(page.getByLabel("Supports image input")).toBeChecked();
