@@ -542,7 +542,6 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("Bearer API key").fill("sk-test-full");
   await expect(page.getByLabel("Model")).toHaveValue("deepseek-v4-flash");
   await expect(page.getByLabel("Model").locator("option")).toHaveText(["Select model", "deepseek-v4-flash"]);
-  await expect(page.getByText("1 model allowed for this key.")).toBeVisible();
   await expect(page.getByLabel("Max tokens")).toHaveCount(0);
   const promptBox = page.getByPlaceholder("Send a test prompt");
   await promptBox.fill("Hello");

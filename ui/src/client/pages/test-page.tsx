@@ -161,7 +161,6 @@ export function TestPage() {
               <option value="">{modelsResource.loading ? "Loading models" : "Select model"}</option>
               {allowedModels.map((item) => <option key={item.model_name} value={item.model_name}>{item.model_name}</option>)}
             </select>
-            {selectedKeyRow && allowedModelNames.length ? <span className="field-note compact">{allowedModels.length} model{allowedModels.length === 1 ? "" : "s"} allowed for this key.</span> : null}
           </label>
         </div>
         <div className="chat-window" aria-label="Chat transcript">
