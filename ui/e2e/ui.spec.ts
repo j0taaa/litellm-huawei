@@ -779,3 +779,81 @@ test("opens key and team stats from stats breakdown with paginated logs", async 
   await expect(page.getByRole("link", { name: "Download CSV" })).toHaveAttribute("href", "/api/stats/teams/team-a/export.csv");
   await expect(page.getByText("Recent team spend logs")).toBeVisible();
 });
+
+test("test page persists selected model and clears chat history", async ({ page }) => {
+  await page.route("**/api/keys**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        keys: [{
+          token: "hash-multi-model",
+          key_name: "sk-...multi",
+          key_alias: "Multi model key",
+          models: ["deepseek-v4-flash", "glm-test"],
+          spend: 0,
+          blocked: false
+        }]
+      })
+    });
+  });
+  await page.route("**/api/models**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [{
+          model_name: "deepseek-v4-flash",
+          litellm_params: { model: "deepseek-v4-flash" },
+          model_info: { id: "model-deepseek-v4-flash" }
+        }, {
+          model_name: "glm-test",
+          litellm_params: { model: "glm-test-upstream" },
+          model_info: { id: "model-glm-test" }
+        }]
+      })
+    });
+  });
+  await page.route("**/api/test/chat", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ choices: [{ message: { role: "assistant", content: "Persistent test response" } }] })
+    });
+  });
+
+  await page.goto("/test");
+  await expect(page.getByRole("heading", { name: "LiteLLM Access" })).toBeVisible();
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill("sk-huawei-maas-local");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByRole("heading", { name: "Test" })).toBeVisible();
+  await expect(page.getByLabel("API key", { exact: true })).toHaveValue("hash-multi-model");
+  await page.getByLabel("Bearer API key").fill("sk-test-multi");
+  await expect(page.getByLabel("Model")).toHaveValue("deepseek-v4-flash");
+  await page.getByLabel("Model").selectOption("glm-test");
+  await expect(page.getByLabel("Model")).toHaveValue("glm-test");
+
+  const promptBox = page.getByPlaceholder("Send a test prompt");
+  await promptBox.fill("Remember this model");
+  await promptBox.press("Enter");
+  await expect(page.getByText("Persistent test response")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Test" })).toBeVisible();
+  await expect(page.getByLabel("API key", { exact: true })).toHaveValue("hash-multi-model");
+  await expect(page.getByLabel("Bearer API key")).toHaveValue("sk-test-multi");
+  await expect(page.getByLabel("Model")).toHaveValue("glm-test");
+  await expect(page.getByText("Persistent test response")).toBeVisible();
+
+  await page.getByRole("button", { name: "Clear chat" }).click();
+  await expect(page.getByText("No test messages yet")).toBeVisible();
+  await expect(page.getByText("Persistent test response")).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Test" })).toBeVisible();
+  await expect(page.getByLabel("Model")).toHaveValue("glm-test");
+  await expect(page.getByText("No test messages yet")).toBeVisible();
+  await expect(page.getByText("Persistent test response")).toHaveCount(0);
+});

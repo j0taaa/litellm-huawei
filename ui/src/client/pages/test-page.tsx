@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ImagePlus, MessageSquare, Send, X } from "lucide-react";
+import { ImagePlus, MessageSquare, Send, Trash2, X } from "lucide-react";
 import type { ApiKeyListRow, ModelInfo } from "../../shared/types";
 import { api, useResource } from "../api";
 import { EmptyState, Header } from "../components";
@@ -51,14 +51,15 @@ export function TestPage() {
   }, [apiKey, keys, selectedKey]);
 
   useEffect(() => {
+    if (modelsResource.loading || !modelsResource.data) return;
     if (!allowedModels.length) {
-      if (model) setModel("");
+      if (model && models.length) setModel("");
       return;
     }
     if (!model || !allowedModels.some((item) => item.model_name === model)) {
       setModel(allowedModels[0].model_name);
     }
-  }, [allowedModels, model]);
+  }, [allowedModels, model, models.length, modelsResource.data, modelsResource.loading]);
 
   useEffect(() => {
     saveStoredTestPageState({ selectedKey, apiKey, model, prompt, images, messages });
@@ -138,9 +139,19 @@ export function TestPage() {
     if (!sending) void submitPrompt();
   }
 
+  function clearChatHistory() {
+    setMessages([]);
+    setError("");
+  }
+
   return (
     <section>
-      <Header icon={<MessageSquare size={22} />} title="Test" tone="green" />
+      <Header
+        icon={<MessageSquare size={22} />}
+        title="Test"
+        tone="green"
+        action={<button className="secondary" onClick={clearChatHistory} disabled={!messages.length && !error}><Trash2 size={16} /> Clear chat</button>}
+      />
       <div className="test-shell">
         <div className="test-controls">
           <label>API key
