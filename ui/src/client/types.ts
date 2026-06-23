@@ -9,7 +9,6 @@ export type WebSearchFormState = {
   enabled: boolean;
   mode: WebSearchMode;
   searchToolName: string;
-  plannerModel: string;
   trigger: string;
   maxResults: number;
   maxQueries: number;

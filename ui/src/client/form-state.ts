@@ -28,7 +28,6 @@ export const defaultWebSearchForm: WebSearchFormState = {
   enabled: false,
   mode: "trigger",
   searchToolName: "",
-  plannerModel: "",
   trigger: "[SEARCH]",
   maxResults: 5,
   maxQueries: 2
@@ -214,7 +213,6 @@ export function sharedLimitMetadata(form: KeyFormState | TeamFormState): Record<
       enabled: true,
       mode: form.webSearch.mode,
       search_tool_name: form.webSearch.searchToolName,
-      planner_model: form.webSearch.plannerModel,
       trigger: form.webSearch.mode === "trigger" ? form.webSearch.trigger || defaultWebSearchForm.trigger : undefined,
       max_results: form.webSearch.maxResults,
       max_queries: form.webSearch.maxQueries
@@ -371,7 +369,6 @@ function webSearchFormFromMetadata(metadata: Record<string, unknown>): WebSearch
     enabled: webSearch.enabled === true,
     mode: webSearch.mode === "automatic" ? "automatic" : "trigger",
     searchToolName: stringField(webSearch, "search_tool_name") || "",
-    plannerModel: stringField(webSearch, "planner_model") || "",
     trigger: stringField(webSearch, "trigger") || defaultWebSearchForm.trigger,
     maxResults: numberField(webSearch, "max_results") || defaultWebSearchForm.maxResults,
     maxQueries: numberField(webSearch, "max_queries") || defaultWebSearchForm.maxQueries

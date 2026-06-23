@@ -1,19 +1,16 @@
 import { Search } from "lucide-react";
-import type { ModelInfo, SearchTool } from "../shared/types";
+import type { SearchTool } from "../shared/types";
 import type { WebSearchFormState, WebSearchMode } from "./types";
 
 export function WebSearchControls({
   value,
   onChange,
-  searchTools,
-  models
+  searchTools
 }: {
   value: WebSearchFormState;
   onChange: (value: WebSearchFormState) => void;
   searchTools: SearchTool[];
-  models: ModelInfo[];
 }) {
-  const modelNames = models.map((model) => model.model_name);
   return (
     <fieldset className="config-section">
       <span className="field-label section-title"><Search size={16} /> Web search</span>
@@ -36,12 +33,6 @@ export function WebSearchControls({
                 {searchTools.map((tool) => <option key={tool.search_tool_id || tool.search_tool_name} value={tool.search_tool_name}>{tool.search_tool_name}</option>)}
               </select>
             </label>
-            <label>Planner model
-              <select value={value.plannerModel} onChange={(event) => onChange({ ...value, plannerModel: event.target.value })} required={value.enabled}>
-                <option value="">Select planner model</option>
-                {modelNames.map((name) => <option key={name} value={name}>{name}</option>)}
-              </select>
-            </label>
           </div>
           <div className="config-grid">
             {value.mode === "trigger" ? (
@@ -53,7 +44,7 @@ export function WebSearchControls({
           <p className="field-note compact">
             {value.mode === "trigger"
               ? `Search runs only when the prompt includes ${value.trigger || "[SEARCH]"}.`
-              : "A planner model runs before each request and should search only when current web context is needed."}
+              : "The request model checks whether current web context is needed before answering."}
           </p>
         </>
       ) : <p className="field-note compact">No web search context is added before model calls.</p>}

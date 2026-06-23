@@ -14,7 +14,6 @@ class WebSearchConfig:
     enabled: bool
     mode: str
     search_tool_name: str
-    planner_model: str
     trigger: str = "[SEARCH]"
     max_results: int = 5
     max_queries: int = 2
@@ -42,6 +41,10 @@ async def apply_web_search(
     user_text = "\n\n".join(_user_text_values(data)).strip()
     if not user_text:
         return data
+    planner_model = _request_model_id(data)
+    if not planner_model:
+        _set_metadata(data, {"enabled": True, "mode": config.mode, "searched": False, "reason": "request_model_missing"})
+        return data
 
     search_text = user_text
     if config.mode == "trigger":
@@ -53,6 +56,7 @@ async def apply_web_search(
 
     planner = await _plan_search(
         config=config,
+        planner_model=planner_model,
         user_text=search_text,
         base_url=base_url or _internal_base_url(),
         api_key=api_key or _internal_api_key(),
@@ -91,7 +95,7 @@ async def apply_web_search(
         "mode": config.mode,
         "searched": True,
         "search_tool_name": config.search_tool_name,
-        "planner_model": config.planner_model,
+        "planner_model": planner_model,
         "queries": queries,
         "result_count": result_count,
     })
@@ -113,22 +117,20 @@ def web_search_config_from_metadata(metadata: dict[str, Any] | None) -> WebSearc
     if mode not in {"trigger", "automatic"}:
         return None
     search_tool_name = _string(raw.get("search_tool_name"))
-    planner_model = _string(raw.get("planner_model"))
-    if not search_tool_name or not planner_model:
+    if not search_tool_name:
         return None
     trigger = _string(raw.get("trigger")) or "[SEARCH]"
     return WebSearchConfig(
         enabled=True,
         mode=mode,
         search_tool_name=search_tool_name,
-        planner_model=planner_model,
         trigger=trigger,
         max_results=_bounded_int(raw.get("max_results"), default=5, minimum=1, maximum=20),
         max_queries=_bounded_int(raw.get("max_queries"), default=2, minimum=1, maximum=5),
     )
 
 
-async def _plan_search(*, config: WebSearchConfig, user_text: str, base_url: str, api_key: str) -> dict[str, Any]:
+async def _plan_search(*, config: WebSearchConfig, planner_model: str, user_text: str, base_url: str, api_key: str) -> dict[str, Any]:
     prompt = (
         "You decide whether a model request needs live web search before answering. "
         "Return only JSON with keys should_search, queries, reason. "
@@ -137,7 +139,7 @@ async def _plan_search(*, config: WebSearchConfig, user_text: str, base_url: str
         "For explicit trigger mode, search is usually needed unless the request is malformed."
     )
     payload = {
-        "model": config.planner_model,
+        "model": planner_model,
         "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": user_text},
@@ -227,6 +229,11 @@ def _search_results(response: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(raw, list):
         return []
     return [item for item in raw if isinstance(item, dict)]
+
+
+def _request_model_id(data: dict[str, Any]) -> str | None:
+    model = data.get("model")
+    return model if isinstance(model, str) and model else None
 
 
 def _append_search_context(data: dict[str, Any], results_by_query: list[dict[str, Any]]) -> None:

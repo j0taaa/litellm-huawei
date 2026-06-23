@@ -211,7 +211,6 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("Enable web search augmentation").check();
   await expect(page.getByLabel("Search mode")).toHaveValue("trigger");
   await page.getByLabel("Search tool").selectOption("perplexity-search");
-  await page.getByLabel("Planner model").selectOption("deepseek-v4-flash");
   await expect(page.getByLabel("Trigger token")).toHaveValue("[SEARCH]");
   await expect(page.getByLabel("Max results")).toHaveValue("5");
   await expect(page.getByLabel("Max queries")).toHaveValue("2");
@@ -237,7 +236,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
         timezone: "America/Sao_Paulo",
         rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }]
       },
-      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
+      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
       huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Describe only visible safety data." }
     },
     models: ["deepseek-v4-flash"]
@@ -260,7 +259,6 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Image model")).toHaveValue("openrouter/qwen-vl");
   await expect(page.getByLabel("Image extraction prompt")).toHaveValue("Existing key image prompt.");
   await expect(page.getByLabel("Search tool")).toHaveValue("perplexity-search");
-  await expect(page.getByLabel("Planner model")).toHaveValue("deepseek-v4-flash");
   await expect(page.getByLabel("CPF redaction")).toBeChecked();
   await page.getByPlaceholder("Production app").fill("Edited key");
   await page.getByLabel("Block key").check();
@@ -276,7 +274,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     models: ["deepseek-v4-flash"],
     metadata: {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
-      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
+      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
       huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Existing key image prompt." }
     },
     prompt_policy_ids: selectedPolicyIds
@@ -304,7 +302,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     models: ["deepseek-v4-flash"],
     metadata: {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
-      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
+      huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
       huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Existing key image prompt." }
     },
     prompt_policy_ids: selectedPolicyIds
@@ -380,7 +378,6 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("Enable web search augmentation").check();
   await page.getByLabel("Search mode").selectOption("automatic");
   await page.getByLabel("Search tool").selectOption("perplexity-search");
-  await page.getByLabel("Planner model").selectOption("glm-test");
   await page.getByLabel("Max results").fill("4");
   await page.getByLabel("Max queries").fill("1");
   await page.getByLabel("Enable image analysis for text-only models").check();
@@ -398,7 +395,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     metadata: {
       huawei_token_budget: { max_tokens: 30000, reset_duration: "30d", counts: "total_tokens" },
       huawei_time_access: { timezone: "America/Sao_Paulo", rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }] },
-      huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", planner_model: "glm-test", max_results: 4, max_queries: 1 },
+      huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", max_results: 4, max_queries: 1 },
       huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Describe team image inputs." }
     },
     models: ["glm-test"],

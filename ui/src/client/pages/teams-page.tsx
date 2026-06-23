@@ -185,7 +185,6 @@ export function TeamsPage() {
               value={form.webSearch}
               onChange={(webSearch) => setForm({ ...form, webSearch })}
               searchTools={searchTools}
-              models={models.data?.data || []}
             />
             <ImageAnalysisControls value={form} onChange={setForm} models={models.data?.data || []} />
             <fieldset className="model-access">
