@@ -540,8 +540,9 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("API key", { exact: true })).toHaveValue("hash-delete-test");
   await expect(page.getByLabel("Bearer API key")).toHaveValue("");
   await page.getByLabel("Bearer API key").fill("sk-test-full");
-  await page.getByLabel("Model").selectOption("glm-test");
-  await expect(page.getByLabel("Model")).toHaveValue("glm-test");
+  await expect(page.getByLabel("Model")).toHaveValue("deepseek-v4-flash");
+  await expect(page.getByLabel("Model").locator("option")).toHaveText(["Select model", "deepseek-v4-flash"]);
+  await expect(page.getByText("1 model allowed for this key.")).toBeVisible();
   const promptBox = page.getByPlaceholder("Send a test prompt");
   await promptBox.fill("Hello");
   await promptBox.press("Shift+Enter");
@@ -551,7 +552,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByText("Test response from model")).toBeVisible();
   expect(testChatPayload).toMatchObject({
     api_key: "sk-test-full",
-    model: "glm-test",
+    model: "deepseek-v4-flash",
     messages: [{ role: "user", content: "Hello\nfrom the test tab" }],
     max_tokens: 512
   });

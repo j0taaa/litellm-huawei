@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ImagePlus, MessageSquare, Send, X } from "lucide-react";
 import type { ApiKeyListRow, ModelInfo } from "../../shared/types";
 import { api, useResource } from "../api";
@@ -21,10 +21,12 @@ export function TestPage() {
   const [messages, setMessages] = useState<TestChatMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!model && models[0]?.model_name) setModel(models[0].model_name);
-  }, [model, models]);
+  const selectedKeyRow = useMemo(() => keys.find((key) => keyIdentifier(key) === selectedKey), [keys, selectedKey]);
+  const allowedModelNames = useMemo(() => selectedKeyRow ? normalizeKeyRow(selectedKeyRow).models || [] : [], [selectedKeyRow]);
+  const allowedModels = useMemo(
+    () => allowedModelNames.length ? models.filter((item) => allowedModelNames.includes(item.model_name)) : models,
+    [allowedModelNames, models]
+  );
 
   useEffect(() => {
     if (!selectedKey && keys.length) {
@@ -34,6 +36,16 @@ export function TestPage() {
       setApiKey(usableBearerKey(first));
     }
   }, [keys, selectedKey]);
+
+  useEffect(() => {
+    if (!allowedModels.length) {
+      if (model) setModel("");
+      return;
+    }
+    if (!model || !allowedModels.some((item) => item.model_name === model)) {
+      setModel(allowedModels[0].model_name);
+    }
+  }, [allowedModels, model]);
 
   function selectKey(value: string) {
     setSelectedKey(value);
@@ -131,8 +143,9 @@ export function TestPage() {
           <label>Model
             <select aria-label="Model" value={model} onChange={(event) => setModel(event.target.value)} disabled={modelsResource.loading}>
               <option value="">{modelsResource.loading ? "Loading models" : "Select model"}</option>
-              {models.map((item) => <option key={item.model_name} value={item.model_name}>{item.model_name}</option>)}
+              {allowedModels.map((item) => <option key={item.model_name} value={item.model_name}>{item.model_name}</option>)}
             </select>
+            {selectedKeyRow && allowedModelNames.length ? <span className="field-note compact">{allowedModels.length} model{allowedModels.length === 1 ? "" : "s"} allowed for this key.</span> : null}
           </label>
           <label>Max tokens<input type="number" min="1" max="8192" step="1" value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} /></label>
         </div>
