@@ -6,6 +6,7 @@ export type SessionUser = {
 
 export type ApiKeyRow = {
   token?: string;
+  api_key?: string | null;
   key_alias?: string | null;
   key_name?: string | null;
   user_id?: string | null;

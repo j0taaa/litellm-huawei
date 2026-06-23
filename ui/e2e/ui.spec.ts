@@ -505,12 +505,14 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Test" })).toBeVisible();
   await expect(page).toHaveURL(/\/test$/);
   await expect(page.getByLabel("API key", { exact: true })).toHaveValue("hash-delete-test");
+  await expect(page.getByLabel("Bearer API key")).toHaveValue("");
+  await page.getByLabel("Bearer API key").fill("sk-test-full");
   await expect(page.getByLabel("Model")).toHaveValue("glm-test");
   await page.getByPlaceholder("Send a test prompt").fill("Hello from the test tab");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByText("Test response from model")).toBeVisible();
   expect(testChatPayload).toMatchObject({
-    api_key: "hash-delete-test",
+    api_key: "sk-test-full",
     model: "glm-test",
     messages: [{ role: "user", content: "Hello from the test tab" }],
     max_tokens: 512

@@ -385,6 +385,10 @@ app.post("/api/test/chat", async (request, reply) => {
     })).min(1),
     max_tokens: z.number().int().min(1).max(8192).optional()
   }).parse(request.body || {});
+  if (!isUsableLiteLLMApiKey(body.api_key)) {
+    reply.code(400);
+    throw new Error("Paste the full LiteLLM API key for testing. Key hashes and masked values like sk-...1234 cannot authenticate chat requests.");
+  }
   try {
     return await litellm.request("/chat/completions", body.api_key, {
       method: "POST",
@@ -558,6 +562,11 @@ function isHuaweiProviderAuthError(message: string) {
     message.includes("Invalid authorization header") ||
     message.includes("Huawei MaaS provider API key")
   );
+}
+
+function isUsableLiteLLMApiKey(value: string): boolean {
+  const key = value.trim();
+  return key.startsWith("sk-") && !key.includes("...") && key.length > 8;
 }
 
 async function findGeneratedLiteLLMTeam(litellmKey: string, alias: string | null): Promise<string | null> {

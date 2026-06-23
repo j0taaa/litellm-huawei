@@ -28,15 +28,17 @@ export function TestPage() {
 
   useEffect(() => {
     if (!selectedKey && keys.length) {
-      const id = keyIdentifier(keys[0]);
+      const first = keys[0];
+      const id = keyIdentifier(first);
       setSelectedKey(id);
-      setApiKey(id);
+      setApiKey(usableBearerKey(first));
     }
   }, [keys, selectedKey]);
 
   function selectKey(value: string) {
     setSelectedKey(value);
-    setApiKey(value);
+    const row = keys.find((key) => keyIdentifier(key) === value);
+    setApiKey(row ? usableBearerKey(row) : "");
   }
 
   async function attachImages(files: FileList | null) {
@@ -113,7 +115,10 @@ export function TestPage() {
               })}
             </select>
           </label>
-          <label>Bearer API key<input aria-label="Bearer API key" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Paste key if only a hash is listed" /></label>
+          <label>Bearer API key
+            <input aria-label="Bearer API key" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Paste the full sk-... key" />
+            <span className="field-note compact">Existing LiteLLM keys are shown as hashes or masked names, so paste the full key if this field is empty.</span>
+          </label>
           <label>Model
             <select aria-label="Model" value={model} onChange={(event) => setModel(event.target.value)} disabled={modelsResource.loading}>
               <option value="">{modelsResource.loading ? "Loading models" : "Select model"}</option>
@@ -158,6 +163,11 @@ export function TestPage() {
       </div>
     </section>
   );
+}
+
+function usableBearerKey(row: ApiKeyListRow): string {
+  const key = normalizeKeyRow(row).api_key || normalizeKeyRow(row).key_name || normalizeKeyRow(row).token || "";
+  return typeof key === "string" && key.startsWith("sk-") && !key.includes("...") ? key : "";
 }
 
 function fileToDataUrl(file: File): Promise<string> {
