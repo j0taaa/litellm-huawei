@@ -34,6 +34,8 @@ export const defaultWebSearchForm: WebSearchFormState = {
   maxQueries: 2
 };
 
+export const defaultImageAnalysisPrompt = "Describe all visible text, objects, layout, people, charts, and important context in the image. Be factual and detailed. Do not answer the user's task; only extract image information.";
+
 export const defaultKeyForm: KeyFormState = {
   key_alias: "",
   team_id: "",
@@ -63,7 +65,9 @@ export const defaultKeyForm: KeyFormState = {
   policyIds: [],
   skillIds: [],
   webSearch: { ...defaultWebSearchForm },
-  imageAnalysis: false
+  imageAnalysis: false,
+  imageModel: "",
+  imagePrompt: defaultImageAnalysisPrompt
 };
 
 export const defaultTeamForm: TeamFormState = {
@@ -91,7 +95,9 @@ export const defaultTeamForm: TeamFormState = {
   policyIds: [],
   skillIds: [],
   webSearch: { ...defaultWebSearchForm },
-  imageAnalysis: false
+  imageAnalysis: false,
+  imageModel: "",
+  imagePrompt: defaultImageAnalysisPrompt
 };
 
 export const defaultPolicyRule: PromptPolicyRule = {
@@ -213,7 +219,11 @@ export function sharedLimitMetadata(form: KeyFormState | TeamFormState): Record<
       max_results: form.webSearch.maxResults,
       max_queries: form.webSearch.maxQueries
     }) : undefined,
-    huawei_image_support: form.imageAnalysis ? { enabled: true } : undefined
+    huawei_image_support: form.imageAnalysis ? clean({
+      enabled: true,
+      vision_model: form.imageModel || undefined,
+      extraction_prompt: form.imagePrompt || defaultImageAnalysisPrompt
+    }) : undefined
   });
 }
 
@@ -297,7 +307,9 @@ export function teamFormFromRow(row: TeamRow, policies: PromptPolicy[] = [], ski
       .filter((skill) => skill.assignments.some((assignment) => assignment.target_type === "team" && assignment.target_id === row.team_id))
       .map((skill) => skill.id),
     webSearch,
-    imageAnalysis: imageSupport.enabled === true
+    imageAnalysis: imageSupport.enabled === true,
+    imageModel: stringField(imageSupport, "vision_model") || "",
+    imagePrompt: stringField(imageSupport, "extraction_prompt") || defaultImageAnalysisPrompt
   };
 }
 
@@ -346,7 +358,9 @@ export function keyFormFromRow(row: ApiKeyRow, policies: PromptPolicy[] = [], ke
       .filter((skill) => skill.assignments.some((assignment) => assignment.target_type === "key" && assignment.target_id === key))
       .map((skill) => skill.id),
     webSearch,
-    imageAnalysis: imageSupport.enabled === true
+    imageAnalysis: imageSupport.enabled === true,
+    imageModel: stringField(imageSupport, "vision_model") || "",
+    imagePrompt: stringField(imageSupport, "extraction_prompt") || defaultImageAnalysisPrompt
   };
 }
 

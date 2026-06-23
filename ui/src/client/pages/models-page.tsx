@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layers3, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { Globe2, Layers3, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import type { ModelInfo } from "../../shared/types";
 import { api, useResource } from "../api";
 import { EmptyState, Header, Modal } from "../components";
@@ -21,6 +21,19 @@ export function ModelsPage() {
   function openCreateModel() {
     setEditingModel(null);
     setForm(defaultModelForm);
+    setModalOpen(true);
+  }
+
+  function openCreateOpenRouterModel() {
+    setEditingModel(null);
+    setForm({
+      ...defaultModelForm,
+      custom_llm_provider: "openrouter",
+      api_base: "https://openrouter.ai/api/v1",
+      api_key: "os.environ/OPENROUTER_API_KEY",
+      supports_vision: true,
+      pricing_ranges: defaultPricingRanges()
+    });
     setModalOpen(true);
   }
 
@@ -107,7 +120,7 @@ export function ModelsPage() {
         icon={<Layers3 size={22} />}
         title="Models"
         tone="rose"
-        action={<div className="header-actions"><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button><button className="secondary" onClick={syncCatalog} disabled={syncing}><RefreshCcw size={16} /> {syncing ? "Syncing" : "Sync catalog"}</button><button className="primary" onClick={openCreateModel}><Plus size={16} /> Add model</button></div>}
+        action={<div className="header-actions"><button className="secondary" onClick={reload}><RefreshCcw size={16} /> Refresh</button><button className="secondary" onClick={syncCatalog} disabled={syncing}><RefreshCcw size={16} /> {syncing ? "Syncing" : "Sync catalog"}</button><button className="secondary" onClick={openCreateOpenRouterModel}><Globe2 size={16} /> Add OpenRouter</button><button className="primary" onClick={openCreateModel}><Plus size={16} /> Add model</button></div>}
       />
       {syncMessage ? <div className={syncError ? "error" : "notice"}>{syncMessage}</div> : null}
       {modalOpen ? (

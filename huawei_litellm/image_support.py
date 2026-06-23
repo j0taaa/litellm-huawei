@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -45,7 +46,7 @@ def image_support_config_from_row(row: Any) -> ImageSupportConfig | None:
     if not row:
         return None
     enabled = bool(row.get("enabled")) if isinstance(row, dict) else bool(row["enabled"])
-    api_key = _row_string(row, "openrouter_api_key")
+    api_key = _row_string(row, "openrouter_api_key") or os.environ.get("OPENROUTER_API_KEY", "")
     vision_model = _row_string(row, "vision_model") or "openai/gpt-4o-mini"
     extraction_prompt = _row_string(row, "extraction_prompt") or DEFAULT_EXTRACTION_PROMPT
     max_tokens = _row_int(row, "max_tokens") or 1200

@@ -27,6 +27,23 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   let deletePayload: Record<string, any> | undefined;
   let policyCreatePayload: Record<string, any> | undefined;
   let policyAssignmentsPayload: Record<string, any> | undefined;
+  let modelCreatePayload: Record<string, any> | undefined;
+  let modelUpdatePayload: Record<string, any> | undefined;
+  let modelDeleteUrl = "";
+  let modelSyncCalled = false;
+  const modelList = [{
+    model_name: "deepseek-v4-flash",
+    litellm_params: { model: "deepseek-v4-flash", custom_llm_provider: "openai", api_base: "https://example.com/v1", api_key: "os.environ/HUAWEI_MAAS_API_KEY" },
+    model_info: { id: "model-deepseek-v4-flash", key: "deepseek-v4-flash", max_input_tokens: 1000, max_output_tokens: 500, input_cost_per_token: 0.000001, output_cost_per_token: 0.000002, huawei_maas: { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", currency: "USD", tiered_pricing: false, pricing: { input: [], output: [] } } }
+  }, {
+    model_name: "glm-test",
+    litellm_params: { model: "glm-test-upstream", custom_llm_provider: "openai", api_base: "https://example.com/v1", api_key: "os.environ/HUAWEI_MAAS_API_KEY" },
+    model_info: { id: "model-glm-test", key: "glm-test-upstream", max_input_tokens: 1000, max_output_tokens: 500, input_cost_per_token: 0.000001, output_cost_per_token: 0.000002, huawei_maas: { id: "glm-test-upstream", name: "GLM Test", currency: "USD", tiered_pricing: false, pricing: { input: [], output: [] } } }
+  }, {
+    model_name: "openrouter-vision",
+    litellm_params: { model: "openrouter/qwen-vl", custom_llm_provider: "openrouter", api_base: "https://openrouter.ai/api/v1", api_key: "os.environ/OPENROUTER_API_KEY" },
+    model_info: { id: "model-openrouter-vision", key: "openrouter/qwen-vl", supports_vision: true, huawei_maas: { id: "openrouter/qwen-vl", name: "OpenRouter Vision", currency: "USD", tiered_pricing: false, supports_vision: true, pricing: { input: [], output: [] } } }
+  }];
   let policyList = {
     policies: [{
       id: "policy-cpf",
@@ -57,7 +74,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
             metadata: {
               huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
               huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
-              huawei_image_support: { enabled: true }
+              huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Existing key image prompt." }
             },
             blocked: false
           }]
@@ -88,6 +105,34 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     if (method === "DELETE") {
       deletePayload = route.request().postDataJSON();
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ deleted_keys: ["hash-delete-test"] }) });
+      return;
+    }
+    await route.continue();
+  });
+  await page.route("**/api/models**", async (route) => {
+    const method = route.request().method();
+    if (route.request().url().endsWith("/api/models/sync")) {
+      modelSyncCalled = true;
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ models: 1, created: 1, deleted: 1 }) });
+      return;
+    }
+    if (method === "GET") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: modelList }) });
+      return;
+    }
+    if (method === "POST") {
+      modelCreatePayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    if (method === "PATCH") {
+      modelUpdatePayload = route.request().postDataJSON();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+      return;
+    }
+    if (method === "DELETE") {
+      modelDeleteUrl = route.request().url();
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
       return;
     }
     await route.continue();
@@ -172,6 +217,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Max queries")).toHaveValue("2");
   await expect(page.getByLabel("Enable image analysis for text-only models")).not.toBeChecked();
   await page.getByLabel("Enable image analysis for text-only models").check();
+  await expect(page.getByLabel("Image model")).toHaveValue("openrouter/qwen-vl");
+  await page.getByLabel("Image extraction prompt").fill("Describe only visible safety data.");
   await expect(page.getByText("No models selected means this key can use all models.")).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "deepseek-v4-flash" })).toBeVisible();
   await page.getByRole("checkbox", { name: "deepseek-v4-flash" }).check();
@@ -191,7 +238,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
         rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }]
       },
       huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
-      huawei_image_support: { enabled: true }
+      huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Describe only visible safety data." }
     },
     models: ["deepseek-v4-flash"]
   });
@@ -210,6 +257,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
   await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
   await expect(page.getByLabel("Enable image analysis for text-only models")).toBeChecked();
+  await expect(page.getByLabel("Image model")).toHaveValue("openrouter/qwen-vl");
+  await expect(page.getByLabel("Image extraction prompt")).toHaveValue("Existing key image prompt.");
   await expect(page.getByLabel("Search tool")).toHaveValue("perplexity-search");
   await expect(page.getByLabel("Planner model")).toHaveValue("deepseek-v4-flash");
   await expect(page.getByLabel("CPF redaction")).toBeChecked();
@@ -228,7 +277,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     metadata: {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
       huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
-      huawei_image_support: { enabled: true }
+      huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Existing key image prompt." }
     },
     prompt_policy_ids: selectedPolicyIds
   });
@@ -240,6 +289,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
   await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
   await expect(page.getByLabel("Enable image analysis for text-only models")).toBeChecked();
+  await expect(page.getByLabel("Image model")).toHaveValue("openrouter/qwen-vl");
+  await expect(page.getByLabel("Image extraction prompt")).toHaveValue("Existing key image prompt.");
   await expect(page.getByLabel("CPF redaction")).toBeChecked();
   await page.getByRole("dialog").getByRole("button", { name: "Clone key" }).click();
   await expect(page.getByText("sk-test-clone")).toBeVisible();
@@ -254,7 +305,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     metadata: {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
       huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", planner_model: "deepseek-v4-flash", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
-      huawei_image_support: { enabled: true }
+      huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Existing key image prompt." }
     },
     prompt_policy_ids: selectedPolicyIds
   });
@@ -262,15 +313,11 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByRole("button", { name: "Done" }).click();
   await expect(page.getByRole("dialog", { name: "Clone key" })).toBeHidden();
   await page.getByRole("row", { name: /Delete test/ }).getByTitle("Delete key").click();
-  expect(deletePayload).toEqual({ keys: ["hash-delete-test"] });
+  await expect.poll(() => deletePayload).toEqual({ keys: ["hash-delete-test"] });
 
   let teamCreatePayload: Record<string, any> | undefined;
   let teamUpdatePayload: Record<string, any> | undefined;
   let teamTogglePayload: Record<string, any> | undefined;
-  let modelCreatePayload: Record<string, any> | undefined;
-  let modelUpdatePayload: Record<string, any> | undefined;
-  let modelDeleteUrl = "";
-  let modelSyncCalled = false;
   await page.route("**/api/teams**", async (route) => {
     const method = route.request().method();
     if (method === "GET") {
@@ -292,7 +339,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
               huawei_token_budget: { max_tokens: 25000, reset_duration: "1d", counts: "total_tokens" },
               huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2, 3], start: "08:00", end: "18:00" }] },
               huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", planner_model: "glm-test", max_results: 4, max_queries: 1 },
-              huawei_image_support: { enabled: true }
+              huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Existing team image prompt." }
             },
             blocked: false
           }]
@@ -309,44 +356,6 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
       const payload = route.request().postDataJSON();
       if (Object.keys(payload || {}).length === 1 && payload?.blocked === true) teamTogglePayload = payload;
       else teamUpdatePayload = payload;
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
-      return;
-    }
-    await route.continue();
-  });
-  await page.route("**/api/models**", async (route) => {
-    const method = route.request().method();
-    if (route.request().url().endsWith("/api/models/sync")) {
-      modelSyncCalled = true;
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ models: 1, created: 1, deleted: 1 }) });
-      return;
-    }
-    if (method === "GET") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          data: [{
-            model_name: "glm-test",
-            litellm_params: { model: "glm-test-upstream", custom_llm_provider: "openai", api_base: "https://example.com/v1", api_key: "os.environ/HUAWEI_MAAS_API_KEY" },
-            model_info: { id: "model-glm-test", key: "glm-test-upstream", max_input_tokens: 1000, max_output_tokens: 500, input_cost_per_token: 0.000001, output_cost_per_token: 0.000002, huawei_maas: { id: "glm-test-upstream", name: "GLM Test", currency: "USD", tiered_pricing: false, pricing: { input: [], output: [] } } }
-          }]
-        })
-      });
-      return;
-    }
-    if (method === "POST") {
-      modelCreatePayload = route.request().postDataJSON();
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
-      return;
-    }
-    if (method === "PATCH") {
-      modelUpdatePayload = route.request().postDataJSON();
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
-      return;
-    }
-    if (method === "DELETE") {
-      modelDeleteUrl = route.request().url();
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
       return;
     }
@@ -375,6 +384,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("Max results").fill("4");
   await page.getByLabel("Max queries").fill("1");
   await page.getByLabel("Enable image analysis for text-only models").check();
+  await expect(page.getByLabel("Image model")).toHaveValue("openrouter/qwen-vl");
+  await page.getByLabel("Image extraction prompt").fill("Describe team image inputs.");
   await page.getByRole("checkbox", { name: "glm-test" }).check();
   await page.getByLabel("CPF redaction").check();
   await page.getByRole("dialog").getByRole("button", { name: "Create team" }).click();
@@ -388,7 +399,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
       huawei_token_budget: { max_tokens: 30000, reset_duration: "30d", counts: "total_tokens" },
       huawei_time_access: { timezone: "America/Sao_Paulo", rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }] },
       huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", planner_model: "glm-test", max_results: 4, max_queries: 1 },
-      huawei_image_support: { enabled: true }
+      huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Describe team image inputs." }
     },
     models: ["glm-test"],
     prompt_policy_ids: ["policy-cpf"]
@@ -406,6 +417,8 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
   await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
   await expect(page.getByLabel("Enable image analysis for text-only models")).toBeChecked();
+  await expect(page.getByLabel("Image model")).toHaveValue("openrouter/qwen-vl");
+  await expect(page.getByLabel("Image extraction prompt")).toHaveValue("Existing team image prompt.");
   await expect(page.getByLabel("Search mode")).toHaveValue("automatic");
   await expect(page.getByLabel("Max results")).toHaveValue("4");
   await expect(page.getByLabel("CPF redaction")).not.toBeChecked();
@@ -420,6 +433,9 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     max_parallel_requests: 4,
     blocked: false,
     models: ["glm-test"],
+    metadata: {
+      huawei_image_support: { enabled: true, vision_model: "openrouter/qwen-vl", extraction_prompt: "Existing team image prompt." }
+    },
     prompt_policy_ids: ["policy-cpf"]
   });
 
@@ -469,13 +485,20 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
       }
     }
   });
-  await page.getByTitle("Edit model").first().click();
+  await page.getByRole("button", { name: "Add OpenRouter" }).click();
+  await expect(page.getByRole("dialog", { name: "Add model" })).toBeVisible();
+  await expect(page.getByLabel("Provider")).toHaveValue("openrouter");
+  await expect(page.getByLabel("API base")).toHaveValue("https://openrouter.ai/api/v1");
+  await expect(page.getByLabel("API key reference")).toHaveValue("os.environ/OPENROUTER_API_KEY");
+  await expect(page.getByLabel("Supports image input")).toBeChecked();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("row", { name: /glm-test/ }).getByTitle("Edit model").click();
   await expect(page.getByRole("dialog", { name: "Edit model" })).toBeVisible();
   await expect(page.getByLabel("Model name")).toHaveValue("glm-test");
   await page.getByLabel("Display name").fill("GLM Edited");
   await page.getByRole("dialog").getByRole("button", { name: "Save changes" }).click();
   await expect.poll(() => modelUpdatePayload).toMatchObject({ model_name: "glm-test", model_info: { id: "model-glm-test", huawei_maas: { name: "GLM Edited" } } });
-  await page.getByTitle("Delete model").first().click();
+  await page.getByRole("row", { name: /glm-test/ }).getByTitle("Delete model").click();
   await expect.poll(() => modelDeleteUrl).toContain("/api/models/model-glm-test");
 
   await page.getByRole("link", { name: "Policies" }).click();
@@ -519,6 +542,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("API key", { exact: true })).toHaveValue("hash-delete-test");
   await expect(page.getByLabel("Bearer API key")).toHaveValue("");
   await page.getByLabel("Bearer API key").fill("sk-test-full");
+  await page.getByLabel("Model").selectOption("glm-test");
   await expect(page.getByLabel("Model")).toHaveValue("glm-test");
   const promptBox = page.getByPlaceholder("Send a test prompt");
   await promptBox.fill("Hello");

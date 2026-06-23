@@ -45,6 +45,8 @@ export type KeyFormState = {
   skillIds: string[];
   webSearch: WebSearchFormState;
   imageAnalysis: boolean;
+  imageModel: string;
+  imagePrompt: string;
 };
 
 export type TeamFormState = {
@@ -73,6 +75,8 @@ export type TeamFormState = {
   skillIds: string[];
   webSearch: WebSearchFormState;
   imageAnalysis: boolean;
+  imageModel: string;
+  imagePrompt: string;
 };
 
 export type ModelFormState = {

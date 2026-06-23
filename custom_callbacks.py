@@ -16,7 +16,7 @@ from litellm.integrations.custom_logger import CustomLogger
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from huawei_litellm.pricing import find_model, model_cost_usd
-from huawei_litellm.image_support import ImageSupportError, apply_image_support, image_support_config_from_row
+from huawei_litellm.image_support import DEFAULT_EXTRACTION_PROMPT, ImageSupportConfig, ImageSupportError, apply_image_support, image_support_config_from_row
 from huawei_litellm.prompt_policies import PromptPolicyBlocked, apply_prompt_policies
 from huawei_litellm.prompt_skills import apply_prompt_skills
 from huawei_litellm.time_access import is_time_access_allowed, time_access_from_metadata
@@ -53,11 +53,12 @@ class HuaweiMaaSCostLogger(CustomLogger):
                     detail={"error": "time_access_denied", "source": source, "timezone": time_access.timezone},
                 )
 
-        if _image_support_enabled(team_metadata) or _image_support_enabled(auth_metadata):
+        image_support_metadata = _image_support_metadata(team_metadata, auth_metadata)
+        if image_support_metadata:
             try:
                 data = await apply_image_support(
                     data,
-                    config=await self._image_support_config(),
+                    config=_image_support_config_for_metadata(await self._image_support_config(), image_support_metadata),
                     supports_vision=await self._model_supports_vision(_request_model_id(data)),
                 )
             except ImageSupportError as exc:
@@ -520,11 +521,32 @@ def _auth_metadata(user_api_key_dict: Any) -> dict[str, Any] | None:
     return metadata if isinstance(metadata, dict) else None
 
 
-def _image_support_enabled(metadata: dict[str, Any] | None) -> bool:
-    if not isinstance(metadata, dict):
-        return False
-    value = metadata.get("huawei_image_support")
-    return isinstance(value, dict) and value.get("enabled") is True
+def _image_support_metadata(team_metadata: dict[str, Any] | None, key_metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+    merged: dict[str, Any] = {}
+    for metadata in (team_metadata, key_metadata):
+        if not isinstance(metadata, dict):
+            continue
+        value = metadata.get("huawei_image_support")
+        if isinstance(value, dict) and value.get("enabled") is True:
+            merged.update(value)
+    return merged or None
+
+
+def _image_support_config_for_metadata(config: Any, metadata: dict[str, Any]) -> ImageSupportConfig:
+    def field(name: str, default: Any = ""):
+        if isinstance(config, dict):
+            return config.get(name, default)
+        return getattr(config, name, default)
+
+    vision_model = metadata.get("vision_model") if isinstance(metadata.get("vision_model"), str) else ""
+    extraction_prompt = metadata.get("extraction_prompt") if isinstance(metadata.get("extraction_prompt"), str) else ""
+    return ImageSupportConfig(
+        enabled=True,
+        openrouter_api_key=str(field("openrouter_api_key", "") or os.environ.get("OPENROUTER_API_KEY", "")),
+        vision_model=vision_model or str(field("vision_model", "") or "openai/gpt-4o-mini"),
+        extraction_prompt=extraction_prompt or str(field("extraction_prompt", "") or DEFAULT_EXTRACTION_PROMPT),
+        max_tokens=max(1, int(field("max_tokens", 1200) or 1200)),
+    )
 
 
 def _key_identifier(user_api_key_dict: Any) -> str | None:
