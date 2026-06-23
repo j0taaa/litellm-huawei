@@ -127,7 +127,6 @@ export function TestPage() {
           </label>
           <label>Bearer API key
             <input aria-label="Bearer API key" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="Paste the full sk-... key" />
-            <span className="field-note compact">Existing LiteLLM keys are shown as hashes or masked names, so paste the full key if this field is empty.</span>
           </label>
           <label>Model
             <select aria-label="Model" value={model} onChange={(event) => setModel(event.target.value)} disabled={modelsResource.loading}>
