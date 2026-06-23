@@ -24,18 +24,39 @@ DEFAULT_EXTRACTION_PROMPT = (
 )
 
 
-async def apply_image_support(data: dict[str, Any], *, config: ImageSupportConfig | None, supports_vision: bool) -> dict[str, Any]:
+async def apply_image_support(
+    data: dict[str, Any],
+    *,
+    config: ImageSupportConfig | None,
+    supports_vision: bool,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    parent_key_id: str | None = None,
+    parent_team_id: str | None = None,
+    key_metadata: dict[str, Any] | None = None,
+    team_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if _is_internal_request(data):
+        return data
     image_parts = _image_parts(data)
     if not image_parts:
         return data
     if supports_vision:
         return data
-    if config is None or not config.enabled or not config.openrouter_api_key:
+    if config is None or not config.enabled:
         raise ImageSupportError("image_support_not_configured")
+    helper_api_key = api_key or _internal_api_key()
+    if not helper_api_key:
+        raise ImageSupportError("image_support_internal_key_missing")
+    helper_metadata = _helper_metadata(
+        parent_key_id=parent_key_id,
+        parent_team_id=parent_team_id,
+        key_metadata=key_metadata,
+        team_metadata=team_metadata,
+    )
 
-    vision_model = _openrouter_model_id(config.vision_model)
-    extracted = await _extract_image_text(data, image_parts, config)
-    _remove_images_and_append_analysis(data, extracted, vision_model)
+    extracted = await _extract_image_text(data, image_parts, config, base_url=base_url or _internal_base_url(), api_key=helper_api_key, metadata=helper_metadata)
+    _remove_images_and_append_analysis(data, extracted, config.vision_model)
     return data
 
 
@@ -47,8 +68,8 @@ def image_support_config_from_row(row: Any) -> ImageSupportConfig | None:
     if not row:
         return None
     enabled = bool(row.get("enabled")) if isinstance(row, dict) else bool(row["enabled"])
-    api_key = _row_string(row, "openrouter_api_key") or os.environ.get("OPENROUTER_API_KEY", "")
-    vision_model = _row_string(row, "vision_model") or "openai/gpt-4o-mini"
+    api_key = _row_string(row, "openrouter_api_key")
+    vision_model = _row_string(row, "vision_model") or "gpt-4o-mini"
     extraction_prompt = _row_string(row, "extraction_prompt") or DEFAULT_EXTRACTION_PROMPT
     max_tokens = _row_int(row, "max_tokens") or 1200
     return ImageSupportConfig(
@@ -60,39 +81,33 @@ def image_support_config_from_row(row: Any) -> ImageSupportConfig | None:
     )
 
 
-async def _extract_image_text(data: dict[str, Any], image_parts: list[dict[str, Any]], config: ImageSupportConfig) -> str:
+async def _extract_image_text(data: dict[str, Any], image_parts: list[dict[str, Any]], config: ImageSupportConfig, *, base_url: str, api_key: str, metadata: dict[str, Any] | None = None) -> str:
     user_text = "\n\n".join(_user_text_values(data)) or "Analyze the attached image."
     content: list[dict[str, Any]] = [{"type": "text", "text": user_text}]
     content.extend(json.loads(json.dumps(part)) for part in image_parts)
     payload = {
-        "model": _openrouter_model_id(config.vision_model),
+        "model": config.vision_model,
         "messages": [
             {"role": "system", "content": config.extraction_prompt},
             {"role": "user", "content": content},
         ],
         "max_tokens": config.max_tokens,
+        "metadata": metadata or {"huawei_image_extraction_internal": True},
     }
-    response = await asyncio.to_thread(_openrouter_request, config.openrouter_api_key, payload)
+    response = await asyncio.to_thread(_litellm_request, f"{base_url}/chat/completions", api_key, payload)
     extracted = _choice_text(response)
     if not extracted:
         raise ImageSupportError("image_extraction_empty")
     return extracted
 
 
-def _openrouter_model_id(model: str) -> str:
-    prefix = "openrouter/"
-    return model[len(prefix):] if model.startswith(prefix) else model
-
-
-def _openrouter_request(api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
+def _litellm_request(url: str, api_key: str, payload: dict[str, Any]) -> dict[str, Any]:
     request = urllib.request.Request(
-        "https://openrouter.ai/api/v1/chat/completions",
+        url,
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://litellm.hwctools.site",
-            "X-Title": "Huawei LiteLLM UI",
         },
         method="POST",
     )
@@ -104,6 +119,38 @@ def _openrouter_request(api_key: str, payload: dict[str, Any]) -> dict[str, Any]
         raise ImageSupportError(f"image_extraction_failed:{exc.code}:{body[:500]}") from exc
     except (OSError, json.JSONDecodeError) as exc:
         raise ImageSupportError(f"image_extraction_failed:{exc}") from exc
+
+
+def _internal_base_url() -> str:
+    return os.environ.get("HUAWEI_LITELLM_INTERNAL_BASE_URL") or os.environ.get("LITELLM_PROXY_URL") or "http://127.0.0.1:4000"
+
+
+def _internal_api_key() -> str:
+    return os.environ.get("HUAWEI_IMAGE_SUPPORT_INTERNAL_KEY") or os.environ.get("LITELLM_MASTER_KEY", "")
+
+
+def _helper_metadata(
+    *,
+    parent_key_id: str | None,
+    parent_team_id: str | None,
+    key_metadata: dict[str, Any] | None,
+    team_metadata: dict[str, Any] | None,
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "huawei_image_extraction_internal": True,
+        "huawei_parent_key_id": parent_key_id,
+        "huawei_parent_team_id": parent_team_id,
+    }
+    spend_logs_metadata = {
+        "huawei_parent_key_id": parent_key_id,
+        "huawei_parent_team_id": parent_team_id,
+    }
+    metadata["spend_logs_metadata"] = {key: value for key, value in spend_logs_metadata.items() if value is not None}
+    if isinstance(key_metadata, dict):
+        metadata["huawei_parent_key_metadata"] = key_metadata
+    if isinstance(team_metadata, dict):
+        metadata["huawei_parent_team_metadata"] = team_metadata
+    return {key: value for key, value in metadata.items() if value is not None}
 
 
 def _choice_text(response: dict[str, Any]) -> str:
@@ -162,6 +209,11 @@ def _image_parts(data: dict[str, Any]) -> list[dict[str, Any]]:
             if isinstance(part, dict) and part.get("type") == "image_url" and isinstance(part.get("image_url"), (dict, str)):
                 parts.append(part)
     return parts
+
+
+def _is_internal_request(data: dict[str, Any]) -> bool:
+    metadata = data.get("metadata")
+    return isinstance(metadata, dict) and metadata.get("huawei_image_extraction_internal") is True
 
 
 def _user_text_values(data: dict[str, Any]) -> list[str]:

@@ -35,9 +35,12 @@ class HuaweiMaaSCostLogger(CustomLogger):
         self.reservation_ttl_seconds = int(os.environ.get("HUAWEI_TOKEN_BUDGET_RESERVATION_TTL_SECONDS", "3600"))
 
     async def async_pre_call_hook(self, user_api_key_dict, cache, data: dict, call_type: str):
-        auth_metadata = _auth_metadata(user_api_key_dict)
-        team_id = _team_identifier(user_api_key_dict)
-        team_metadata = await self._team_metadata(team_id)
+        parent_context = _internal_parent_context(data)
+        auth_metadata = parent_context.get("key_metadata") if parent_context else _auth_metadata(user_api_key_dict)
+        team_id = parent_context.get("team_id") if parent_context else _team_identifier(user_api_key_dict)
+        team_metadata = parent_context.get("team_metadata") if parent_context else await self._team_metadata(team_id)
+        request_api_key = _request_api_key(user_api_key_dict)
+        key_id = parent_context.get("key_id") if parent_context else _key_identifier(user_api_key_dict)
         try:
             team_time_access = time_access_from_metadata(team_metadata)
             key_time_access = time_access_from_metadata(auth_metadata)
@@ -60,6 +63,11 @@ class HuaweiMaaSCostLogger(CustomLogger):
                     data,
                     config=_image_support_config_for_metadata(await self._image_support_config(), image_support_metadata),
                     supports_vision=await self._model_supports_vision(_request_model_id(data)),
+                    api_key=request_api_key,
+                    parent_key_id=key_id,
+                    parent_team_id=team_id,
+                    key_metadata=auth_metadata,
+                    team_metadata=team_metadata,
                 )
             except ImageSupportError as exc:
                 raise HTTPException(
@@ -72,6 +80,9 @@ class HuaweiMaaSCostLogger(CustomLogger):
                 data,
                 team_metadata=team_metadata,
                 key_metadata=auth_metadata,
+                api_key=request_api_key,
+                parent_key_id=key_id,
+                parent_team_id=team_id,
             )
         except WebSearchError as exc:
             raise HTTPException(
@@ -79,28 +90,28 @@ class HuaweiMaaSCostLogger(CustomLogger):
                 detail={"error": "web_search_failed", "message": str(exc)},
             ) from exc
 
-        data = apply_prompt_skills(data, auth_metadata)
+        if not _is_internal_helper_request(data):
+            data = apply_prompt_skills(data, auth_metadata)
 
-        try:
-            policy_result = apply_prompt_policies(data, auth_metadata)
-        except PromptPolicyBlocked as exc:
-            raise HTTPException(
-                status_code=403,
-                detail={"error": "prompt_policy_blocked", **exc.match},
-            ) from exc
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=403,
-                detail={"error": "prompt_policy_invalid_config", "message": str(exc)},
-            ) from exc
-        data = policy_result.data
+            try:
+                policy_result = apply_prompt_policies(data, auth_metadata)
+            except PromptPolicyBlocked as exc:
+                raise HTTPException(
+                    status_code=403,
+                    detail={"error": "prompt_policy_blocked", **exc.match},
+                ) from exc
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=403,
+                    detail={"error": "prompt_policy_invalid_config", "message": str(exc)},
+                ) from exc
+            data = policy_result.data
 
         team_budget = token_budget_from_metadata(team_metadata)
         key_budget = token_budget_from_metadata(auth_metadata)
         if team_budget is None and key_budget is None:
             return data
 
-        key_id = _key_identifier(user_api_key_dict)
         if key_budget is not None and not key_id:
             raise HTTPException(status_code=429, detail={"error": "token_budget_key_missing"})
         if team_budget is not None and not team_id:
@@ -462,7 +473,7 @@ class HuaweiMaaSCostLogger(CustomLogger):
                       id TEXT PRIMARY KEY,
                       enabled BOOLEAN NOT NULL DEFAULT FALSE,
                       openrouter_api_key TEXT NOT NULL DEFAULT '',
-                      vision_model TEXT NOT NULL DEFAULT 'openai/gpt-4o-mini',
+                      vision_model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
                       extraction_prompt TEXT NOT NULL DEFAULT '',
                       max_tokens INTEGER NOT NULL DEFAULT 1200,
                       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -543,7 +554,7 @@ def _image_support_config_for_metadata(config: Any, metadata: dict[str, Any]) ->
     return ImageSupportConfig(
         enabled=True,
         openrouter_api_key=str(field("openrouter_api_key", "") or os.environ.get("OPENROUTER_API_KEY", "")),
-        vision_model=vision_model or str(field("vision_model", "") or "openai/gpt-4o-mini"),
+        vision_model=vision_model or str(field("vision_model", "") or "gpt-4o-mini"),
         extraction_prompt=extraction_prompt or str(field("extraction_prompt", "") or DEFAULT_EXTRACTION_PROMPT),
         max_tokens=max(1, int(field("max_tokens", 1200) or 1200)),
     )
@@ -560,6 +571,19 @@ def _key_identifier(user_api_key_dict: Any) -> str | None:
     return None
 
 
+def _request_api_key(user_api_key_dict: Any) -> str | None:
+    for field in ("api_key", "key"):
+        value = _auth_value(user_api_key_dict, field)
+        if _is_usable_api_key(value):
+            return value
+    token = _auth_value(user_api_key_dict, "token")
+    return token if _is_usable_api_key(token) else None
+
+
+def _is_usable_api_key(value: Any) -> bool:
+    return isinstance(value, str) and value.startswith("sk-") and "..." not in value
+
+
 def _team_identifier(user_api_key_dict: Any) -> str | None:
     value = _auth_value(user_api_key_dict, "team_id")
     return value if isinstance(value, str) and value else None
@@ -573,6 +597,30 @@ def _auth_value(user_api_key_dict: Any, field: str) -> Any:
     if hasattr(user_api_key_dict, "model_dump"):
         return user_api_key_dict.model_dump().get(field)
     return None
+
+
+def _is_internal_helper_request(data: dict[str, Any]) -> bool:
+    metadata = data.get("metadata")
+    return isinstance(metadata, dict) and (
+        metadata.get("huawei_web_search_internal") is True
+        or metadata.get("huawei_image_extraction_internal") is True
+    )
+
+
+def _internal_parent_context(data: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = data.get("metadata")
+    if not isinstance(metadata, dict) or not _is_internal_helper_request(data):
+        return None
+    context: dict[str, Any] = {}
+    if isinstance(metadata.get("huawei_parent_key_id"), str):
+        context["key_id"] = metadata["huawei_parent_key_id"]
+    if isinstance(metadata.get("huawei_parent_team_id"), str):
+        context["team_id"] = metadata["huawei_parent_team_id"]
+    if isinstance(metadata.get("huawei_parent_key_metadata"), dict):
+        context["key_metadata"] = metadata["huawei_parent_key_metadata"]
+    if isinstance(metadata.get("huawei_parent_team_metadata"), dict):
+        context["team_metadata"] = metadata["huawei_parent_team_metadata"]
+    return context
 
 
 def _reservations_from_kwargs(kwargs: dict[str, Any]) -> list[dict[str, Any]]:

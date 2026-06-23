@@ -197,8 +197,9 @@ def test_prompt_skills_are_appended_before_request(monkeypatch):
 def test_image_request_to_text_only_model_is_transformed_when_key_enabled(monkeypatch):
     logger = logger_with_team(monkeypatch, {})
 
-    async def fake_apply(data, *, config, supports_vision):
+    async def fake_apply(data, *, config, supports_vision, api_key=None, **kwargs):
         assert not supports_vision
+        assert api_key == "sk-user-key"
         assert config.vision_model == "openrouter/qwen-vl"
         assert config.extraction_prompt == "Key image prompt."
         data["messages"][0]["content"] = "What is this?\n\nImage analysis:\nA chart with revenue bars."
@@ -218,7 +219,7 @@ def test_image_request_to_text_only_model_is_transformed_when_key_enabled(monkey
 
     data = run(
         logger.async_pre_call_hook(
-            {"token": "key-a", "metadata": {"huawei_image_support": {"enabled": True, "vision_model": "openrouter/qwen-vl", "extraction_prompt": "Key image prompt."}}},
+            {"token": "key-a", "api_key": "sk-user-key", "metadata": {"huawei_image_support": {"enabled": True, "vision_model": "openrouter/qwen-vl", "extraction_prompt": "Key image prompt."}}},
             None,
             {
                 "model": "deepseek-v4-pro",
@@ -243,7 +244,7 @@ def test_image_request_to_text_only_model_is_transformed_when_key_enabled(monkey
 def test_image_request_to_text_only_model_is_unchanged_when_not_enabled(monkeypatch):
     logger = logger_with_team(monkeypatch, {})
 
-    async def fake_apply(data, *, config, supports_vision):
+    async def fake_apply(data, *, config, supports_vision, api_key=None, **kwargs):
         raise AssertionError("image support should not run")
 
     monkeypatch.setattr(custom_callbacks, "apply_image_support", fake_apply)
@@ -269,7 +270,8 @@ def test_image_request_to_text_only_model_is_unchanged_when_not_enabled(monkeypa
 def test_image_request_to_text_only_model_is_transformed_when_team_enabled(monkeypatch):
     logger = logger_with_team(monkeypatch, {"huawei_image_support": {"enabled": True, "vision_model": "openrouter/team-vl", "extraction_prompt": "Team image prompt."}})
 
-    async def fake_apply(data, *, config, supports_vision):
+    async def fake_apply(data, *, config, supports_vision, api_key=None, **kwargs):
+        assert api_key == "sk-user-key"
         assert config.vision_model == "openrouter/team-vl"
         assert config.extraction_prompt == "Team image prompt."
         data["metadata"] = {"huawei_image_extraction": {"extracted": True, "model": config.vision_model}}
@@ -284,7 +286,7 @@ def test_image_request_to_text_only_model_is_transformed_when_team_enabled(monke
 
     data = run(
         logger.async_pre_call_hook(
-            {"token": "key-a", "team_id": "team-a", "metadata": {}},
+            {"token": "key-a", "api_key": "sk-user-key", "team_id": "team-a", "metadata": {}},
             None,
             {"model": "deepseek-v4-pro", "messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]},
             "chat",
@@ -297,7 +299,8 @@ def test_image_request_to_text_only_model_is_transformed_when_team_enabled(monke
 def test_key_image_config_overrides_team_image_config(monkeypatch):
     logger = logger_with_team(monkeypatch, {"huawei_image_support": {"enabled": True, "vision_model": "openrouter/team-vl", "extraction_prompt": "Team prompt."}})
 
-    async def fake_apply(data, *, config, supports_vision):
+    async def fake_apply(data, *, config, supports_vision, api_key=None, **kwargs):
+        assert api_key == "sk-user-key"
         assert config.vision_model == "openrouter/key-vl"
         assert config.extraction_prompt == "Key prompt."
         data["metadata"] = {"huawei_image_extraction": {"extracted": True, "model": config.vision_model}}
@@ -312,7 +315,7 @@ def test_key_image_config_overrides_team_image_config(monkeypatch):
 
     data = run(
         logger.async_pre_call_hook(
-            {"token": "key-a", "team_id": "team-a", "metadata": {"huawei_image_support": {"enabled": True, "vision_model": "openrouter/key-vl", "extraction_prompt": "Key prompt."}}},
+            {"token": "key-a", "api_key": "sk-user-key", "team_id": "team-a", "metadata": {"huawei_image_support": {"enabled": True, "vision_model": "openrouter/key-vl", "extraction_prompt": "Key prompt."}}},
             None,
             {"model": "deepseek-v4-pro", "messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]},
             "chat",

@@ -39,16 +39,18 @@ def test_trigger_mode_ignores_prompt_without_trigger(monkeypatch):
 def test_trigger_mode_appends_results_and_removes_trigger(monkeypatch):
     async def plan(**kwargs):
         assert kwargs["planner_model"] == "glm-5.1"
+        assert kwargs["api_key"] == "sk-user-key"
         return {"should_search": True, "queries": ["Huawei MaaS latest models"], "reason": "latest"}
 
     async def search(**kwargs):
+        assert kwargs["api_key"] == "sk-user-key"
         return {"results": [{"title": "Huawei model list", "url": "https://example.com/models", "snippet": "GLM-5.1 is available."}]}
 
     monkeypatch.setattr(web_search, "_plan_search", plan)
     monkeypatch.setattr(web_search, "_run_search", search)
     data = {"model": "glm-5.1", "messages": [{"role": "user", "content": "[SEARCH] latest Huawei MaaS models"}]}
 
-    result = run(apply_web_search(data, team_metadata=None, key_metadata=config()))
+    result = run(apply_web_search(data, team_metadata=None, key_metadata=config(), api_key="sk-user-key"))
 
     content = result["messages"][0]["content"]
     assert "[SEARCH]" not in content
@@ -69,7 +71,7 @@ def test_automatic_mode_skips_when_planner_says_no(monkeypatch):
     monkeypatch.setattr(web_search, "_run_search", fail_search)
     data = {"model": "glm-5.1", "messages": [{"role": "user", "content": "Write a haiku about clouds"}]}
 
-    result = run(apply_web_search(data, team_metadata=None, key_metadata=config(mode="automatic")))
+    result = run(apply_web_search(data, team_metadata=None, key_metadata=config(mode="automatic"), api_key="sk-user-key"))
 
     assert result["messages"][0]["content"] == "Write a haiku about clouds"
     assert result["metadata"]["huawei_web_search"]["reason"] == "stable_knowledge"
@@ -117,6 +119,20 @@ def test_no_results_raise_web_search_error(monkeypatch):
         run(
             apply_web_search(
                 {"model": "glm-5.1", "messages": [{"role": "user", "content": "[SEARCH] no results"}]},
+                team_metadata=None,
+                key_metadata=config(),
+                api_key="sk-user-key",
+            )
+        )
+
+
+def test_web_search_requires_internal_key_when_user_key_is_unavailable(monkeypatch):
+    monkeypatch.delenv("HUAWEI_WEB_SEARCH_INTERNAL_KEY", raising=False)
+    monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
+    with pytest.raises(WebSearchError, match="web_search_internal_key_missing"):
+        run(
+            apply_web_search(
+                {"model": "glm-5.1", "messages": [{"role": "user", "content": "[SEARCH] latest news"}]},
                 team_metadata=None,
                 key_metadata=config(),
             )

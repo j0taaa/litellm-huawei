@@ -216,7 +216,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Max queries")).toHaveValue("2");
   await expect(page.getByLabel("Enable image analysis for text-only models")).not.toBeChecked();
   await page.getByLabel("Enable image analysis for text-only models").check();
-  await expect(page.getByLabel("Image model")).toHaveValue("qwen-vl");
+  await expect(page.getByLabel("Image model")).toHaveValue("openrouter-vision");
   await page.getByLabel("Image extraction prompt").fill("Describe only visible safety data.");
   await expect(page.getByText("No models selected means this key can use all models.")).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "deepseek-v4-flash" })).toBeVisible();
@@ -237,7 +237,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
         rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }]
       },
       huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
-      huawei_image_support: { enabled: true, vision_model: "qwen-vl", extraction_prompt: "Describe only visible safety data." }
+      huawei_image_support: { enabled: true, vision_model: "openrouter-vision", extraction_prompt: "Describe only visible safety data." }
     },
     models: ["deepseek-v4-flash"]
   });
@@ -256,7 +256,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
   await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
   await expect(page.getByLabel("Enable image analysis for text-only models")).toBeChecked();
-  await expect(page.getByLabel("Image model")).toHaveValue("qwen-vl");
+  await expect(page.getByLabel("Image model")).toHaveValue("openrouter-vision");
   await expect(page.getByLabel("Image extraction prompt")).toHaveValue("Existing key image prompt.");
   await expect(page.getByLabel("Search tool")).toHaveValue("perplexity-search");
   await expect(page.getByLabel("CPF redaction")).toBeChecked();
@@ -275,7 +275,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     metadata: {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
       huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
-      huawei_image_support: { enabled: true, vision_model: "qwen-vl", extraction_prompt: "Existing key image prompt." }
+      huawei_image_support: { enabled: true, vision_model: "openrouter-vision", extraction_prompt: "Existing key image prompt." }
     },
     prompt_policy_ids: selectedPolicyIds
   });
@@ -287,7 +287,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
   await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
   await expect(page.getByLabel("Enable image analysis for text-only models")).toBeChecked();
-  await expect(page.getByLabel("Image model")).toHaveValue("qwen-vl");
+  await expect(page.getByLabel("Image model")).toHaveValue("openrouter-vision");
   await expect(page.getByLabel("Image extraction prompt")).toHaveValue("Existing key image prompt.");
   await expect(page.getByLabel("CPF redaction")).toBeChecked();
   await page.getByRole("dialog").getByRole("button", { name: "Clone key" }).click();
@@ -303,7 +303,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     metadata: {
       huawei_time_access: { timezone: "UTC", rules: [{ days: [1, 2], start: "10:00", end: "12:00" }] },
       huawei_web_search: { enabled: true, mode: "trigger", search_tool_name: "perplexity-search", trigger: "[SEARCH]", max_results: 5, max_queries: 2 },
-      huawei_image_support: { enabled: true, vision_model: "qwen-vl", extraction_prompt: "Existing key image prompt." }
+      huawei_image_support: { enabled: true, vision_model: "openrouter-vision", extraction_prompt: "Existing key image prompt." }
     },
     prompt_policy_ids: selectedPolicyIds
   });
@@ -381,7 +381,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await page.getByLabel("Max results").fill("4");
   await page.getByLabel("Max queries").fill("1");
   await page.getByLabel("Enable image analysis for text-only models").check();
-  await expect(page.getByLabel("Image model")).toHaveValue("qwen-vl");
+  await expect(page.getByLabel("Image model")).toHaveValue("openrouter-vision");
   await page.getByLabel("Image extraction prompt").fill("Describe team image inputs.");
   await page.getByRole("checkbox", { name: "glm-test" }).check();
   await page.getByLabel("CPF redaction").check();
@@ -396,7 +396,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
       huawei_token_budget: { max_tokens: 30000, reset_duration: "30d", counts: "total_tokens" },
       huawei_time_access: { timezone: "America/Sao_Paulo", rules: [{ days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" }] },
       huawei_web_search: { enabled: true, mode: "automatic", search_tool_name: "perplexity-search", max_results: 4, max_queries: 1 },
-      huawei_image_support: { enabled: true, vision_model: "qwen-vl", extraction_prompt: "Describe team image inputs." }
+      huawei_image_support: { enabled: true, vision_model: "openrouter-vision", extraction_prompt: "Describe team image inputs." }
     },
     models: ["glm-test"],
     prompt_policy_ids: ["policy-cpf"]
@@ -414,7 +414,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
   await expect(page.getByLabel("Access timezone")).toHaveValue("UTC");
   await expect(page.getByLabel("Enable web search augmentation")).toBeChecked();
   await expect(page.getByLabel("Enable image analysis for text-only models")).toBeChecked();
-  await expect(page.getByLabel("Image model")).toHaveValue("qwen-vl");
+  await expect(page.getByLabel("Image model")).toHaveValue("openrouter-vision");
   await expect(page.getByLabel("Image extraction prompt")).toHaveValue("Existing team image prompt.");
   await expect(page.getByLabel("Search mode")).toHaveValue("automatic");
   await expect(page.getByLabel("Max results")).toHaveValue("4");
@@ -431,7 +431,7 @@ test("login and navigate main MaaS UI pages", async ({ page }) => {
     blocked: false,
     models: ["glm-test"],
     metadata: {
-      huawei_image_support: { enabled: true, vision_model: "qwen-vl", extraction_prompt: "Existing team image prompt." }
+      huawei_image_support: { enabled: true, vision_model: "openrouter-vision", extraction_prompt: "Existing team image prompt." }
     },
     prompt_policy_ids: ["policy-cpf"]
   });

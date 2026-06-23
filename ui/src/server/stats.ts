@@ -128,6 +128,9 @@ function add(map: Map<string, StatsBreakdownRow>, id: string, spend: number, nam
 }
 
 function statsKey(log: Record<string, unknown>): string {
+  const metadata = metadataField(log);
+  const parentKey = stringField(metadata, "huawei_parent_key_id");
+  if (parentKey) return parentKey;
   return stringField(log, "api_key") || stringField(log, "key_alias") || "unknown";
 }
 
@@ -144,6 +147,9 @@ function keyAliasLookup(keys: Array<Record<string, unknown>>): Map<string, strin
 }
 
 function keyDisplayName(keyId: string, log: Record<string, unknown>, aliases: Map<string, string>): string {
+  const metadata = metadataField(log);
+  const parentAlias = aliases.get(stringField(metadata, "huawei_parent_key_id") || "");
+  if (parentAlias) return parentAlias;
   return aliases.get(keyId) || stringField(log, "key_alias") || keyId;
 }
 
@@ -170,6 +176,19 @@ function numberField(value: Record<string, unknown>, key: string): number | null
 function valueField(value: Record<string, unknown>, key: string): string | number | boolean | null {
   const field = value[key];
   return typeof field === "string" || typeof field === "number" || typeof field === "boolean" ? field : null;
+}
+
+function metadataField(log: Record<string, unknown>): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const field of [log.metadata, log.request_metadata]) {
+    if (!field || typeof field !== "object" || Array.isArray(field)) continue;
+    Object.assign(merged, field);
+    const spendLogsMetadata = (field as Record<string, unknown>).spend_logs_metadata;
+    if (spendLogsMetadata && typeof spendLogsMetadata === "object" && !Array.isArray(spendLogsMetadata)) {
+      Object.assign(merged, spendLogsMetadata);
+    }
+  }
+  return merged;
 }
 
 function displayModelName(model: string): string {

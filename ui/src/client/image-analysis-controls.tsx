@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Image } from "lucide-react";
 import type { ModelInfo } from "../shared/types";
 import { defaultImageAnalysisPrompt } from "./form-state";
@@ -16,6 +17,15 @@ type Props<T extends ImageAnalysisValue> = {
 
 export function ImageAnalysisControls<T extends ImageAnalysisValue>({ value, onChange, models }: Props<T>) {
   const options = imageModelOptions(models);
+  const selectedOption = value.imageModel
+    ? options.find((option) => option.value === value.imageModel || option.aliases.includes(value.imageModel))
+    : undefined;
+
+  useEffect(() => {
+    if (selectedOption && selectedOption.value !== value.imageModel) {
+      onChange({ ...value, imageModel: selectedOption.value });
+    }
+  }, [onChange, selectedOption, value]);
 
   function patch(next: Partial<ImageAnalysisValue>) {
     onChange({ ...value, ...next });
@@ -29,7 +39,7 @@ export function ImageAnalysisControls<T extends ImageAnalysisValue>({ value, onC
     });
   }
 
-  const hasCustomSelectedModel = value.imageModel && !options.some((option) => option.value === value.imageModel);
+  const hasCustomSelectedModel = value.imageModel && !selectedOption;
 
   return (
     <fieldset className="config-section">
@@ -61,18 +71,19 @@ export function ImageAnalysisControls<T extends ImageAnalysisValue>({ value, onC
   );
 }
 
-function imageModelOptions(models: ModelInfo[]): Array<{ value: string; label: string }> {
+function imageModelOptions(models: ModelInfo[]): Array<{ value: string; label: string; aliases: string[] }> {
   const seen = new Set<string>();
   const sorted = [...models].sort((left, right) => Number(modelSupportsVision(right)) - Number(modelSupportsVision(left)));
   return sorted.flatMap((model) => {
     const upstream = model.litellm_params?.model || model.model_name;
     const provider = model.litellm_params?.custom_llm_provider || "";
     const normalizedUpstream = provider === "openrouter" ? openRouterModelId(upstream) : upstream;
-    const value = provider === "openrouter" && normalizedUpstream ? normalizedUpstream : model.model_name;
+    const value = model.model_name;
     if (!value || seen.has(value)) return [];
     seen.add(value);
     const label = normalizedUpstream && normalizedUpstream !== model.model_name ? `${model.model_name} (${normalizedUpstream})` : model.model_name;
-    return [{ value, label }];
+    const aliases = [upstream, normalizedUpstream].filter((alias): alias is string => Boolean(alias && alias !== value));
+    return [{ value, label, aliases }];
   });
 }
 

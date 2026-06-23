@@ -28,6 +28,8 @@ async def apply_web_search(
     *,
     team_metadata: dict[str, Any] | None,
     key_metadata: dict[str, Any] | None,
+    parent_key_id: str | None = None,
+    parent_team_id: str | None = None,
     base_url: str | None = None,
     api_key: str | None = None,
 ) -> dict[str, Any]:
@@ -53,13 +55,24 @@ async def apply_web_search(
             return data
         _remove_trigger(data, config.trigger)
         search_text = user_text.replace(config.trigger, " ").strip()
+    helper_api_key = api_key or _internal_api_key()
+    if not helper_api_key:
+        raise WebSearchError("web_search_internal_key_missing")
+    helper_metadata = _helper_metadata(
+        marker="huawei_web_search_internal",
+        parent_key_id=parent_key_id,
+        parent_team_id=parent_team_id,
+        key_metadata=key_metadata,
+        team_metadata=team_metadata,
+    )
 
     planner = await _plan_search(
         config=config,
         planner_model=planner_model,
         user_text=search_text,
         base_url=base_url or _internal_base_url(),
-        api_key=api_key or _internal_api_key(),
+        api_key=helper_api_key,
+        metadata=helper_metadata,
     )
     if not planner.get("should_search"):
         _set_metadata(data, {
@@ -81,7 +94,8 @@ async def apply_web_search(
             config=config,
             query=query,
             base_url=base_url or _internal_base_url(),
-            api_key=api_key or _internal_api_key(),
+            api_key=helper_api_key,
+            metadata=helper_metadata,
         )
         results_by_query.append({"query": query, "results": _search_results(response)[: config.max_results]})
 
@@ -130,7 +144,7 @@ def web_search_config_from_metadata(metadata: dict[str, Any] | None) -> WebSearc
     )
 
 
-async def _plan_search(*, config: WebSearchConfig, planner_model: str, user_text: str, base_url: str, api_key: str) -> dict[str, Any]:
+async def _plan_search(*, config: WebSearchConfig, planner_model: str, user_text: str, base_url: str, api_key: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     prompt = (
         "You decide whether a model request needs live web search before answering. "
         "Return only JSON with keys should_search, queries, reason. "
@@ -146,17 +160,17 @@ async def _plan_search(*, config: WebSearchConfig, planner_model: str, user_text
         ],
         "max_tokens": 300,
         "temperature": 0,
-        "metadata": {"huawei_web_search_internal": True},
+        "metadata": metadata or {"huawei_web_search_internal": True},
     }
     response = await asyncio.to_thread(_json_request, f"{base_url}/chat/completions", api_key, payload)
     return _planner_json(response)
 
 
-async def _run_search(*, config: WebSearchConfig, query: str, base_url: str, api_key: str) -> dict[str, Any]:
+async def _run_search(*, config: WebSearchConfig, query: str, base_url: str, api_key: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = {
         "query": query,
         "max_results": config.max_results,
-        "metadata": {"huawei_web_search_internal": True},
+        "metadata": metadata or {"huawei_web_search_internal": True},
     }
     return await asyncio.to_thread(
         _json_request,
@@ -309,7 +323,10 @@ def _set_metadata(data: dict[str, Any], patch: dict[str, Any]) -> None:
 
 def _is_internal_request(data: dict[str, Any]) -> bool:
     metadata = data.get("metadata")
-    return isinstance(metadata, dict) and metadata.get("huawei_web_search_internal") is True
+    return isinstance(metadata, dict) and (
+        metadata.get("huawei_web_search_internal") is True
+        or metadata.get("huawei_image_extraction_internal") is True
+    )
 
 
 def _internal_base_url() -> str:
@@ -318,6 +335,31 @@ def _internal_base_url() -> str:
 
 def _internal_api_key() -> str:
     return os.environ.get("HUAWEI_WEB_SEARCH_INTERNAL_KEY") or os.environ.get("LITELLM_MASTER_KEY", "")
+
+
+def _helper_metadata(
+    *,
+    marker: str,
+    parent_key_id: str | None,
+    parent_team_id: str | None,
+    key_metadata: dict[str, Any] | None,
+    team_metadata: dict[str, Any] | None,
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        marker: True,
+        "huawei_parent_key_id": parent_key_id,
+        "huawei_parent_team_id": parent_team_id,
+    }
+    spend_logs_metadata = {
+        "huawei_parent_key_id": parent_key_id,
+        "huawei_parent_team_id": parent_team_id,
+    }
+    metadata["spend_logs_metadata"] = {key: value for key, value in spend_logs_metadata.items() if value is not None}
+    if isinstance(key_metadata, dict):
+        metadata["huawei_parent_key_metadata"] = key_metadata
+    if isinstance(team_metadata, dict):
+        metadata["huawei_parent_team_metadata"] = team_metadata
+    return {key: value for key, value in metadata.items() if value is not None}
 
 
 def _bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
